@@ -3,6 +3,7 @@ using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Abstractions.Services;
 using BTCPayServer.Plugins.Template.Services;
 using Microsoft.Extensions.DependencyInjection;
+using System.Diagnostics;
 
 namespace BTCPayServer.Plugins.Template;
 
@@ -15,6 +16,7 @@ public class Plugin : BaseBTCPayServerPlugin
 
     public override void Execute(IServiceCollection services)
     {
+        Debug.WriteLine("EXECUTING NANO PLUGIN");
         services.AddSingleton<IUIExtension>(new UIExtension("TemplatePluginHeaderNav", "header-nav"));
         services.AddHostedService<ApplicationPartsLogger>();
         services.AddHostedService<PluginMigrationRunner>();
