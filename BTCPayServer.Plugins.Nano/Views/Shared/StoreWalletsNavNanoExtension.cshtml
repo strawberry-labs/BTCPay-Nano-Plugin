@@ -1,0 +1,34 @@
+@using BTCPayServer.Plugins.Nano.Configuration
+@using BTCPayServer.Plugins.Nano.Controllers
+@using BTCPayServer.Abstractions.Contracts
+@inject SignInManager<ApplicationUser> SignInManager;
+@inject NanoLikeConfiguration NanoLikeConfiguration;
+@inject IScopeProvider ScopeProvider
+@inject UINanoLikeStoreController UINanoLikeStore;
+@{
+    var storeId = ScopeProvider.GetCurrentStoreId();
+}
+@if (SignInManager.IsSignedIn(User) && User.IsInRole(Roles.ServerAdmin) &&
+NanoLikeConfiguration.NanoLikeConfigurationItems.Any())
+{
+    var store = Context.GetStoreData();
+    var result = await UINanoLikeStore.GetVM(store);
+
+    foreach (var item in result.Items)
+    {
+
+        var isActive = !string.IsNullOrEmpty(storeId) && ViewContext.RouteData.Values.TryGetValue("Controller", out var
+        controller) && controller is not null &&
+        nameof(UINanoLikeStoreController).StartsWith(controller.ToString() ?? string.Empty,
+        StringComparison.InvariantCultureIgnoreCase) &&
+        ViewContext.RouteData.Values.TryGetValue("cryptoCode", out var cryptoCode) && cryptoCode is not null &&
+        cryptoCode.ToString() == item.CryptoCode;
+        <li class="nav-item">
+            <a class="nav-link @(isActive ? "active" : "")" asp-route-cryptoCode="@item.CryptoCode" asp-route-storeId="@storeId"
+                asp-action="GetStoreNanoLikePaymentMethod" asp-controller="UINanoLikeStore">
+                <span class="me-2 btcpay-status btcpay-status--@(item.Enabled ? "enabled" : "pending")"></span>
+                <span>@item.CryptoCode Wallet</span>
+            </a>
+        </li>
+    }
+}

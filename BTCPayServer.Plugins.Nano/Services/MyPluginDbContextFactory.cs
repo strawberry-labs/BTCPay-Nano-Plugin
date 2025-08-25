@@ -7,7 +7,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
-namespace BTCPayServer.Plugins.Template.Services;
+namespace BTCPayServer.Plugins.Nano.Services;
 
 public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<MyPluginDbContext>
 {
