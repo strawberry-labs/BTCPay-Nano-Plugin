@@ -1,0 +1,119 @@
+@using NBitcoin.DataEncoders
+@using Newtonsoft.Json
+@using System.Text
+@using BTCPayServer.Abstractions.Models
+@using BTCPayServer.Plugins.Nano.Controllers
+@inject UINanoLikeStoreController UINanoLikeStore;
+@inject BTCPayServer.Security.ContentSecurityPolicies Csp
+@model BTCPayServer.Plugins.Nano.ViewModels.NanoWalletSettingsViewModel
+@{
+    var cryptoCode = Model.CryptoCode;
+    ViewData["Title"] = StringLocalizer["Receive {0}", cryptoCode];
+    Csp.UnsafeEval();
+}
+
+@section PageHeadContent {
+    <script src="~/vendor/vuejs/vue.min.js" asp-append-version="true"></script>
+    <script src="~/vendor/vue-qrcode/vue-qrcode.min.js" asp-append-version="true"></script>
+    <script src="~/vendor/ur-registry/urlib.min.js" asp-append-version="true"></script>
+    <script src="~/vendor/vue-qrcode-reader/VueQrcodeReader.umd.min.js" asp-append-version="true"></script>
+    <link href="~/vendor/vue-qrcode-reader/vue-qrcode-reader.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<div class="sticky-header">
+    <h2>@ViewData["Title"]</h2>
+    <div>
+        <div class="dropdown">
+            <button class="btn btn-secondary dropdown-toggle" type="button" id="ActionsDropdownToggle"
+                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" text-translate="true">
+                Actions
+            </button>
+
+            <!-- Modal For Actions DropDownToggle, need to be outside of form -->
+            <div class="dropdown-menu" aria-labelledby="ActionsDropdownToggle">
+                <a class="dropdown-item" asp-controller="UINanoLikeStore" asp-action="WalletRescan" id="Rescan"
+                    text-translate="true">Rescan wallet for missing
+                    transactions</a>
+                <form method="post" asp-controller="UINanoLikeStore" asp-action="WalletActions">
+                    <button name="command" type="submit" class="dropdown-item" value="prune" text-translate="true">Prune
+                        old transactions from history</button>
+                    @if (User.IsInRole(Roles.ServerAdmin))
+                    {
+                        <button name="command" type="submit" class="dropdown-item" value="clear" text-translate="true">Clear
+                            all transactions from history</button>
+                    }
+                </form>
+
+                <div class="dropdown-divider"></div>
+
+                <a asp-controller="UINanoLikeStore" asp-action="ReplaceWallet" asp-route-storeId="@Model.StoreId"
+                    asp-route-cryptoCode="@Model.CryptoCode" id="ChangeWalletLink" class="dropdown-item"
+                    data-bs-toggle="modal" data-bs-target="#ConfirmModal"
+                    data-title="@StringLocalizer["Replace {0} wallet", Model.CryptoCode]"
+                    data-description="@ViewData["ReplaceDescription"]"
+                    data-confirm="@StringLocalizer["Setup new wallet"]" data-confirm-input="@StringLocalizer["REPLACE"]"
+                    text-translate="true">
+                    Replace wallet
+                </a>
+                <form method="get" asp-action="DeleteWallet" asp-route-storeId="@Model.StoreId"
+                    asp-route-cryptoCode="@Model.CryptoCode" class="d-inline">
+                    <button type="submit" id="Delete" class="dropdown-item" data-bs-toggle="modal"
+                        data-bs-target="#ConfirmModal"
+                        data-title="@StringLocalizer["Remove {0} wallet", Model.CryptoCode]"
+                        data-description="@ViewData["RemoveDescription"]" data-confirm="@StringLocalizer["Remove"]"
+                        data-confirm-input="@StringLocalizer["REMOVE"]" text-translate="true">Remove wallet</button>
+                </form>
+                <form method="get" asp-action="DeleteWallet" asp-route-storeId="@Model.StoreId"
+                    asp-route-cryptoCode="@Model.CryptoCode" class="d-inline">
+                    <button type="submit" id="Delete" class="dropdown-item" data-bs-toggle="modal"
+                        data-bs-target="#ConfirmModal"
+                        data-title="@StringLocalizer["Remove {0} wallet", Model.CryptoCode]"
+                        data-description="@ViewData["RemoveDescription"]" data-confirm="@StringLocalizer["Remove"]"
+                        data-confirm-input="@StringLocalizer["REMOVE"]" text-translate="true">View Seed</button>
+                </form>
+            </div>
+        </div>
+
+        @* <a id="manage-wallet-labels-button" class="btn btn-secondary" asp-controller="UINanoLikeStore"
+            asp-action="WalletLabels" text-translate="true">Manage labels</a> *@
+
+        <button type="submit" class="btn btn-primary" id="SaveWalletSettings" form="walletSettingsForm"
+            text-translate="true">Save Wallet Settings</button>
+    </div>
+</div>
+
+<partial name="_StatusMessage" />
+<form id="walletSettingsForm" method="post" asp-action="UpdateWalletSettings" asp-route-storeId="@Model.StoreId"
+    asp-route-cryptoCode="@Model.CryptoCode">
+    <div class="form-group my-4">
+        <div class="d-flex align-items-center">
+            <input asp-for="Enabled" type="checkbox" class="btcpay-toggle me-3" />
+            <label asp-for="Enabled" class="form-check-label"></label>
+        </div>
+        <span asp-validation-for="Enabled" class="text-danger"></span>
+    </div>
+
+    <div class="form-group">
+        <label asp-for="Label" class="form-label"></label>
+        <input asp-for="Label" class="form-control" style="max-width:24em;" />
+        <span asp-validation-for="Label" class="text-danger"></span>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.PublicAddress))
+    {
+        <div class="form-group">
+            <label asp-for="PublicAddress" class="form-label">Public Address</label>
+            <div class="input-group clipboard-button" data-clipboard="@Model.PublicAddress">
+                <input asp-for="PublicAddress" class="form-control" readonly />
+                <button type="button" class="btn btn-outline-secondary px-3">
+                    <vc:icon symbol="actions-copy" />
+                </button>
+            </div>
+        </div>
+    }
+
+</form>
+
+<partial name="_Confirm"
+    model="@(new ConfirmModel(StringLocalizer["{0} wallet", Model.CryptoCode], StringLocalizer["Change"], "Update"))" />
+<partial name="ShowQR" />

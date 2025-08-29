@@ -17,6 +17,7 @@ using BTCPayServer.Plugins.Nano.Configuration;
 using BTCPayServer.Plugins.Nano.Payments;
 using BTCPayServer.Plugins.Nano.RPC.Models;
 using BTCPayServer.Plugins.Nano.Services;
+using BTCPayServer.Plugins.Nano.ViewModels;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Stores;
 
@@ -429,7 +430,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
         [HttpPost("{cryptoCode}/walletreceive")]
         [ValidateAntiForgeryToken]
-        public IActionResult WalletReceive(string storeId, string cryptoCode, [FromForm] string command, [FromForm] BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel vm)
+        public IActionResult WalletReceive(string storeId, string cryptoCode, [FromForm] string command, [FromForm] NanoWalletReceiveViewModel vm)
         {
             // if (!RouteData.Values.ContainsKey("walletId"))
             //     RouteData.Values["walletId"] = "mockwallet";
@@ -454,70 +455,62 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         }
 
         [HttpGet("{cryptoCode}/walletsettings")]
-        [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
-        public async Task<IActionResult> WalletSettings(string storeId, string cryptoCode)
+        public IActionResult WalletSettings(string storeId, string cryptoCode)
         {
-            // var checkResult = IsAvailable(cryptoCode, out var store, out var network);
-            // if (checkResult != null)
-            // {
-            //     return checkResult;
-            // }
+            var code = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant();
+            var vm = new NanoWalletSettingsViewModel
+            {
+                StoreId = storeId,
+                // StoreName = "Demo Store",
+                CryptoCode = code,
+                UriScheme = code.ToLowerInvariant(), // e.g., "nano"
+                // WalletId = $"{storeId}-{code}",
 
-            // var derivation = GetExistingDerivationStrategy(cryptoCode, store);
-            // if (derivation == null)
-            // {
-            //     return NotFound();
-            // }
+                Enabled = true,
+                // PayJoinEnabled = false,
+                // CanUsePayJoin = false,
+                // CanSetupMultiSig = false,
+                // IsMultiSigOnServer = false,
+                // DefaultIncludeNonWitnessUtxo = false,
+                // NBXSeedAvailable = false,
 
-            // var storeBlob = store.GetStoreBlob();
-            // var excludeFilters = storeBlob.GetExcludedPaymentMethods();
-            // var perm = await CanUseHotWallet();
-            // var client = _explorerProvider.GetExplorerClient(network);
+                Label = $"{code} Demo Wallet",
+                PublicAddress = "xno_abcdshjfdshjfkdsfsd"
+                // DerivationScheme = $"{code}_MOCK_DERIVATION",
+                // DerivationSchemeInput = null
+            };
 
-            // var handler = _handlers.GetBitcoinHandler(cryptoCode);
+            // // Ensure list is non-null so the view’s for-loop and JSON serialization don’t NRE
+            // vm.AccountKeys ??= new();
 
-            // var vm = new WalletSettingsViewModel
-            // {
-            //     StoreId = storeId,
-            //     CryptoCode = cryptoCode,
-            //     WalletId = new WalletId(storeId, cryptoCode),
-            //     Enabled = !excludeFilters.Match(handler.PaymentMethodId),
-            //     Network = network,
-            //     IsHotWallet = derivation.IsHotWallet,
-            //     Source = derivation.Source,
-            //     RootFingerprint = derivation.GetFirstAccountKeySettings().RootFingerprint.ToString(),
-            //     DerivationScheme = derivation.AccountDerivation?.ToString(),
-            //     DerivationSchemeInput = derivation.AccountOriginal,
-            //     KeyPath = derivation.GetFirstAccountKeySettings().AccountKeyPath?.ToString(),
-            //     UriScheme = network.NBitcoinNetwork.UriScheme,
-            //     Label = derivation.Label,
-            //     NBXSeedAvailable = derivation.IsHotWallet &&
-            //                        perm.CanCreateHotWallet &&
-            //                        !string.IsNullOrEmpty(await client.GetMetadataAsync<string>(derivation.AccountDerivation,
-            //                            WellknownMetadataKeys.MasterHDKey)),
-            //     AccountKeys = (derivation.AccountKeySettings ?? [])
-            //         .Select(e => new WalletSettingsAccountKeyViewModel
-            //         {
-            //             AccountKey = e.AccountKey.ToString(),
-            //             MasterFingerprint = e.RootFingerprint is { } fp ? fp.ToString() : null,
-            //             AccountKeyPath = e.AccountKeyPath == null ? "" : $"m/{e.AccountKeyPath}"
-            //         }).ToList(),
-            //     Config = _dataProtector.ProtectString(JToken.FromObject(derivation, handler.Serializer).ToString()),
-            //     PayJoinEnabled = storeBlob.PayJoinEnabled,
-            //     CanUsePayJoin = perm.CanCreateHotWallet && network.SupportPayJoin && derivation.IsHotWallet,
-            //     CanUseHotWallet = perm.CanCreateHotWallet,
-            //     CanUseRPCImport = perm.CanRPCImport,
-            //     StoreName = store.StoreName,
-            //     CanSetupMultiSig = (derivation.AccountKeySettings ?? []).Length > 1,
-            //     IsMultiSigOnServer = derivation.IsMultiSigOnServer,
-            //     DefaultIncludeNonWitnessUtxo = derivation.DefaultIncludeNonWitnessUtxo
-            // };
+            // Text used by the modal buttons in the view
+            ViewData["ReplaceDescription"] = $"This will disconnect the current {code} wallet from the store and start a new setup.";
+            ViewData["RemoveDescription"] = $"This will remove the {code} wallet from the store. You can add one again later.";
 
-            // ViewData["ReplaceDescription"] = WalletReplaceWarning(derivation.IsHotWallet);
-            // ViewData["RemoveDescription"] = WalletRemoveWarning(derivation.IsHotWallet, network.CryptoCode);
+            return View("/Views/Nano/NanoWalletSettings.cshtml", vm); // or just: return View(vm);
+        }
 
-            // return View(vm);
-            return View("/Views/Nano/NanoWalletSettings.cshtml");
+        [HttpPost("{cryptoCode}/UpdateWalletSettings")]
+        [ValidateAntiForgeryToken]
+        public IActionResult UpdateWalletSettings(string storeId, string cryptoCode, [FromForm] NanoWalletSettingsViewModel vm)
+        {
+            var code = string.IsNullOrWhiteSpace(cryptoCode) ? "NANO" : cryptoCode.ToUpperInvariant();
+
+            vm ??= new NanoWalletSettingsViewModel();
+            vm.StoreId ??= storeId;
+            vm.CryptoCode ??= code;
+            vm.UriScheme ??= code.ToLowerInvariant();
+            // vm.WalletId ??= $"{storeId}-{code}";
+            // vm.AccountKeys ??= new();
+
+            ViewData["ReplaceDescription"] = $"This will disconnect the current {code} wallet from the store and start a new setup.";
+            ViewData["RemoveDescription"] = $"This will remove the {code} wallet from the store. You can add one again later.";
+
+            // Normally you’d persist vm here; for mock/demo we just re-render the view.
+            // Optionally set a success message if you use a status message partial.
+            // TempData["StatusMessage"] = "Wallet settings updated.";
+
+            return View("/Views/Nano/NanoWalletSettings.cshtml", vm); // ensure it returns the same settings view
         }
         private void Exec(string cmd)
         {
