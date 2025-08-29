@@ -146,7 +146,6 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         [HttpGet("{cryptoCode}")]
         public async Task<IActionResult> GetStoreNanoLikePaymentMethod(string cryptoCode)
         {
-            Console.WriteLine("ABCD HERE " + cryptoCode);
             cryptoCode = cryptoCode.ToUpperInvariant();
             if (!_NanoLikeConfiguration.NanoLikeConfigurationItems.ContainsKey(cryptoCode))
             {
@@ -331,77 +330,38 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         [HttpGet("{cryptoCode}/walletsend")]
         public async Task<IActionResult> WalletSend(
             // [ModelBinder(typeof(WalletIdModelBinder))] WalletId walletId,
+            string cryptoCode, string storeId,
             string? defaultDestination = null, string? defaultAmount = null, string[]? bip21 = null,
             [FromQuery] string? returnUrl = null)
         {
-            // var store = await Repository.FindStore(walletId.StoreId);
-            // var paymentMethod = GetDerivationSchemeSettings(walletId);
-            // if (paymentMethod == null || store is null)
-            //     return NotFound();
-            // var network = this.NetworkProvider.GetNetwork<BTCPayNetwork>(walletId.CryptoCode);
-            // if (network == null || network.ReadonlyWallet)
-            //     return NotFound();
+            var vm = new NanoWalletSendModel
+            {
+                CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
+                CurrentBalance = 1234,
+                CryptoDivisibility = 6,
+                FiatDivisibility = 2,
+                Fiat = "USD",
+                Rate = 7.25m, // mock FX rate
+                Outputs = new List<NanoWalletSendModel.TransactionOutput>
+            {
+                new NanoWalletSendModel.TransactionOutput
+                {
+                    DestinationAddress = "nano_3mockaddress1exampleexampleexampleexampleexample1",
+                    Amount = 1.234m,
+                    PayoutId = "mock-payout-001",
+                    Labels = new[] { "demo", "test" }
+                }
+            },
+                BackUrl = Url.Action(nameof(GetStoreNanoLikePaymentMethod), new
+                {
+                    storeId,
+                    cryptoCode
+                }),
+                // ReturnUrl = Url.Action(nameof(WalletSend), new { storeId, cryptoCode })
+            };
 
-            // double.TryParse(defaultAmount, out var amount);
 
-            // var model = new WalletSendModel
-            // {
-            //     CryptoCode = walletId.CryptoCode,
-            //     ReturnUrl = returnUrl ?? HttpContext.Request.GetTypedHeaders().Referer?.AbsolutePath,
-            //     IsMultiSigOnServer = paymentMethod.IsMultiSigOnServer,
-            //     AlwaysIncludeNonWitnessUTXO = paymentMethod.DefaultIncludeNonWitnessUtxo
-            // };
-            // if (bip21?.Any() is true)
-            // {
-            //     var messagePresent = TempData.HasStatusMessage();
-            //     foreach (var link in bip21)
-            //     {
-            //         if (!string.IsNullOrEmpty(link))
-            //         {
-            //             await LoadFromBIP21(walletId, model, link, network, messagePresent);
-            //         }
-            //     }
-            // }
-
-            // if (!(model.Outputs?.Any() is true))
-            // {
-            //     model.Outputs = new List<WalletSendModel.TransactionOutput>()
-            //     {
-            //         new WalletSendModel.TransactionOutput()
-            //         {
-            //             Amount = Convert.ToDecimal(amount), DestinationAddress = defaultDestination
-            //         }
-            //     };
-            // }
-            // var recommendedFeesAsync = GetRecommendedFees(network, _feeRateProvider);
-            // var balance = _walletProvider.GetWallet(network).GetBalance(paymentMethod.AccountDerivation);
-            // model.NBXSeedAvailable = await GetSeed(walletId, network) != null;
-            // var Balance = await balance;
-            // model.CurrentBalance = (Balance.Available ?? Balance.Total).GetValue(network);
-            // if (Balance.Immature is null)
-            //     model.ImmatureBalance = 0;
-            // else
-            //     model.ImmatureBalance = Balance.Immature.GetValue(network);
-
-            // var recommendedFees = await recommendedFeesAsync;
-            // model.RecommendedSatoshiPerByte =
-            //     recommendedFees.Where(option => option != null).ToList();
-
-            // model.FeeSatoshiPerByte = recommendedFees.Skip(1).FirstOrDefault()?.FeeRate;
-            // model.CryptoDivisibility = network.Divisibility;
-
-            // try
-            // {
-            //     var r = await FetchRate(walletId);
-
-            //     model.Rate = r.Rate;
-            //     model.FiatDivisibility = _currencyTable.GetNumberFormatInfo(r.Fiat, true)
-            //         .CurrencyDecimalDigits;
-            //     model.Fiat = r.Fiat;
-            // }
-            // catch (Exception ex) { model.RateError = ex.Message; }
-
-            return View("/Views/Nano/NanoWalletSend.cshtml");
+            return View("/Views/Nano/NanoWalletSend.cshtml", vm);
         }
 
         [HttpGet("{cryptoCode}/walletreceive")]
