@@ -27,8 +27,25 @@ NanoLikeConfiguration.NanoLikeConfigurationItems.Any())
             <a class="nav-link @(isActive ? "active" : "")" asp-route-cryptoCode="@item.CryptoCode" asp-route-storeId="@storeId"
                 asp-action="GetStoreNanoLikePaymentMethod" asp-controller="UINanoLikeStore">
                 <span class="me-2 btcpay-status btcpay-status--@(item.Enabled ? "enabled" : "pending")"></span>
-                <span>@item.CryptoCode Wallet</span>
+                <span>Nano</span>
             </a>
         </li>
+        @if (isActive)
+        {
+            <li class="nav-item nav-item-sub">
+                <a id="WalletNav-Send" class="nav-link" asp-route-storeId="@storeId" asp-controller="UINanoLikeStore"
+                    asp-route-cryptoCode="@item.CryptoCode" asp-action="WalletSend" text-translate="true">Send</a>
+            </li>
+
+            <li class="nav-item nav-item-sub">
+                <a id="WalletNav-Receive" class="nav-link" asp-controller="UINanoLikeStore" asp-action="WalletReceive"
+                    asp-route-storeId="@storeId" asp-route-cryptoCode="@item.CryptoCode" text-translate="true">Receive</a>
+            </li>
+
+            <li class="nav-item nav-item-sub">
+                <a id="WalletNav-Settings" class="nav-link" asp-controller="UINanoLikeStore" asp-action="WalletSettings"
+                    asp-route-cryptoCode="@item.CryptoCode" asp-route-storeId="@storeId" text-translate="true">Settings</a>
+            </li>
+        }
     }
 }

@@ -1,0 +1,290 @@
+@inject BTCPayServerEnvironment env
+@using BTCPayServer.Controllers
+@using BTCPayServer.Components.QRCode
+@using BTCPayServer.Plugins.Nano.Controllers
+@model BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel
+@inject UINanoLikeStoreController UINanoLikeStore;
+
+@using BTCPayServer
+@using BTCPayServer.Services
+@using BTCPayServer.Abstractions
+@using BTCPayServer.Abstractions.Contracts
+
+@{
+    var storeId = (string)Context.GetRouteValue("storeId");
+    var cryptoCode = Model.CryptoCode;
+    @* var walletId = Context.GetRouteValue("walletId").ToString(); *@
+    var returnUrl = Model.ReturnUrl ?? Url.Action(nameof(UINanoLikeStore.GetStoreNanoLikePaymentMethod), new
+    {
+        storeId,
+        cryptoCode
+    });
+    Layout = "_LayoutWizard";
+    ViewData["Title"] = StringLocalizer["Receive {0}", cryptoCode];
+}
+
+@section PageHeadContent
+{
+    <link href="~/main/qrcode.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/vendor/tom-select/tom-select.bootstrap5.min.css" asp-append-version="true" rel="stylesheet">
+    <script src="~/vendor/tom-select/tom-select.complete.min.js" asp-append-version="true"></script>
+}
+
+@section Navbar {
+    <a href="@Url.EnsureLocal(returnUrl, Context.Request)" id="CancelWizard" class="cancel">
+        <vc:icon symbol="cross" />
+    </a>
+}
+
+<header class="text-center">
+    <h1 class="mb-4">@ViewData["Title"]</h1>
+</header>
+
+<form method="post" asp-action="WalletReceive">
+    <input type="hidden" asp-for="ReturnUrl" />
+    @if (string.IsNullOrEmpty(Model.Address))
+    {
+        <div class="payment-box mb-3">
+            <button id="generateButton" class="btn btn-primary w-100" type="submit" name="command"
+                value="generate-new-address">Generate next available @Model.CryptoCode address</button>
+        </div>
+    }
+    else
+    {
+        <noscript>
+            <div class="form-group">
+                <input type="text" class="form-control " readonly="readonly" asp-for="Address" id="address" />
+            </div>
+            <div class="form-group">
+                <input type="text" class="form-control" readonly="readonly" asp-for="PaymentLink" id="payment-link" />
+            </div>
+            @* <div class="row mt-4">
+                <button type="submit" name="command" value="generate-new-address" class="btn btn-primary w-100"
+                    text-translate="true">Generate another address</button>
+            </div> *@
+        </noscript>
+        <div class="nav flex-wrap align-items-center justify-content-center gap-2 mb-4">
+            <a class="btcpay-pill active" data-bs-toggle="tab" href="#address-tab" text-translate="true">Address</a>
+            <a class="btcpay-pill " data-bs-toggle="tab" href="#link-tab" text-translate="true">Link</a>
+        </div>
+        <div class="only-for-js col-sm-10 col-xxl-8 mx-auto" id="app">
+            <div class="tab-content text-center">
+                <div class="tab-pane payment-box" id="link-tab" role="tabpanel">
+                    <div class="qr-container clipboard-button" data-clipboard="@Model.PaymentLink">
+                        <vc:qr-code data="@Model.PaymentLink" />
+                        @if (Model.CryptoImage is not null)
+                        {
+                            <img src="@Model.CryptoImage" class="qr-icon" alt="@Model.CryptoCode" />
+                        }
+                    </div>
+                    <div class="input-group mt-3">
+                        <div class="form-floating">
+                            <vc:truncate-center text="@Model.PaymentLink" padding="15" elastic="true"
+                                classes="form-control-plaintext" id="PaymentLink" />
+                            <label for="PaymentLink" text-translate="true">Payment Link</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-pane payment-box show active" id="address-tab" role="tabpanel">
+                    <div class="qr-container clipboard-button" data-clipboard="@Model.Address">
+                        <vc:qr-code data="@Model.Address" />
+                        @if (Model.CryptoImage is not null)
+                        {
+                            <img src="@Model.CryptoImage" class="qr-icon" alt="@Model.CryptoCode" />
+                        }
+                    </div>
+                    <div class="input-group mt-3">
+                        <div class="form-floating">
+                            <vc:truncate-center text="@Model.Address" padding="15" elastic="true"
+                                classes="form-control-plaintext" id="Address" />
+                            <label for="Address" text-translate="true">Address</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="payment-box">
+            @* <div class="my-3">
+                <div class="input-group">
+                    <div class="form-floating">
+                        <vc:label-manager selected-labels="Model.SelectedLabels"
+                            wallet-object-id="new WalletObjectId(WalletId.Parse(walletId), WalletObjectData.Types.Address, Model.Address)" />
+                        <label text-translate="true">Labels</label>
+                    </div>
+                </div>
+            </div> *@
+            @* <div class="mt-4">
+                <button type="submit" name="command" value="generate-new-address" class="btn btn-primary w-100"
+                    text-translate="true">Generate another address</button>
+            </div>
+            <div class="payment-box mt-3">
+                <a class="btn btn-outline-info w-100" id="reserved-addresses-button" asp-controller="UIWallets"
+                    asp-action="ReservedAddresses" asp-route-walletId="@walletId">
+                    Reserved Addresses
+                </a>
+            </div> *@
+
+
+        </div>
+    }
+    @* @if (env.CheatMode)
+    {
+        <div class="payment-box mt-3">
+            <button type="submit" name="command" value="fill-wallet" class="btn btn-outline-info w-100"
+                text-translate="true">Cheat Mode: Send funds to this wallet</button>
+        </div>
+    } *@
+</form>
+@* 
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Receive</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        .payment-box {
+            border: 1px solid #e5e5e5;
+            border-radius: .5rem;
+            padding: 1rem;
+        }
+
+        .qr-container {
+            position: relative;
+            display: inline-block;
+            width: 240px;
+            height: 240px;
+            border: 1px solid #ccc;
+            border-radius: .5rem;
+            background: #fafafa;
+            margin: 0 auto;
+        }
+
+        .qr-icon {
+            position: absolute;
+            width: 48px;
+            height: 48px;
+            bottom: 8px;
+            right: 8px;
+            opacity: .9;
+        }
+
+        .btcpay-pill {
+            display: inline-block;
+            padding: .25rem .75rem;
+            border-radius: 999px;
+            border: 1px solid #ccc;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .btcpay-pill.active {
+            background: #0d6efd;
+            color: #fff;
+            border-color: #0d6efd;
+        }
+
+        .cancel {
+            text-decoration: none;
+            font-size: 1.25rem;
+        }
+
+        .form-floating .form-control-plaintext {
+            padding-top: 1.625rem;
+            padding-bottom: .625rem;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="container mt-3 d-flex justify-content-end"> <a href="#" id="CancelWizard" class="cancel"
+            title="Close">×</a> </nav>
+    <header class="text-center">
+        <h1 class="mb-4">Receive</h1>
+    </header>
+    <form method="post" action="#" class="container">
+        <div class="payment-box mb-3">
+            <button id="generateButton" class="btn btn-primary w-100" type="submit" name="command"
+                value="generate-new-address">
+                Generate next available address
+            </button>
+        </div>
+
+        <div class="nav flex-wrap align-items-center justify-content-center gap-2 mb-4">
+            <a class="btcpay-pill active" data-bs-toggle="tab" href="#address-tab">Address</a>
+            <a class="btcpay-pill" data-bs-toggle="tab" href="#link-tab">Link</a>
+        </div>
+
+        <div class="col-sm-10 col-xxl-8 mx-auto" id="app">
+            <div class="tab-content text-center">
+                <div class="tab-pane payment-box show active" id="address-tab" role="tabpanel">
+                    <div class="qr-container">
+                        <!-- QR code placeholder -->
+                        <!-- Optional icon -->
+                        <!-- <img src="#" class="qr-icon" alt="CRYPTO" /> -->
+                    </div>
+                    <div class="input-group mt-3">
+                        <div class="form-floating w-100">
+                            <input type="text" class="form-control-plaintext w-100" id="Address" readonly
+                                value="nano_1exampleaddress_or_your_crypto_address_here" />
+                            <label for="Address">Address</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane payment-box" id="link-tab" role="tabpanel">
+                    <div class="qr-container">
+                        <!-- QR code placeholder -->
+                        <!-- Optional icon -->
+                        <!-- <img src="#" class="qr-icon" alt="CRYPTO" /> -->
+                    </div>
+                    <div class="input-group mt-3">
+                        <div class="form-floating w-100">
+                            <input type="text" class="form-control-plaintext w-100" id="PaymentLink" readonly
+                                value="crypto:address?amount=0.01&label=Example" />
+                            <label for="PaymentLink">Payment Link</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="payment-box mt-3">
+            <div class="my-3">
+                <div class="input-group">
+                    <div class="form-floating w-100">
+                        <input type="text" id="Labels" class="form-control" placeholder="Labels" />
+                        <label for="Labels">Labels</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" name="command" value="generate-new-address" class="btn btn-primary w-100">
+                    Generate another address
+                </button>
+            </div>
+
+            <div class="payment-box mt-3">
+                <a class="btn btn-outline-info w-100" id="reserved-addresses-button" href="#">
+                    Reserved Addresses
+                </a>
+            </div>
+        </div>
+
+        <div class="payment-box mt-3">
+            <button type="button" class="btn btn-outline-info w-100">
+                Cheat Mode: Send funds to this wallet
+            </button>
+        </div>
+    </form>
+</body>
+
+</html> *@

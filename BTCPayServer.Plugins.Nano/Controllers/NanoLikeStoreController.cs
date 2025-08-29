@@ -327,6 +327,198 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 new { StatusMessage = $"{cryptoCode} settings updated successfully", storeId = StoreData.Id });
         }
 
+        [HttpGet("{cryptoCode}/walletsend")]
+        public async Task<IActionResult> WalletSend(
+            // [ModelBinder(typeof(WalletIdModelBinder))] WalletId walletId,
+            string? defaultDestination = null, string? defaultAmount = null, string[]? bip21 = null,
+            [FromQuery] string? returnUrl = null)
+        {
+            // var store = await Repository.FindStore(walletId.StoreId);
+            // var paymentMethod = GetDerivationSchemeSettings(walletId);
+            // if (paymentMethod == null || store is null)
+            //     return NotFound();
+            // var network = this.NetworkProvider.GetNetwork<BTCPayNetwork>(walletId.CryptoCode);
+            // if (network == null || network.ReadonlyWallet)
+            //     return NotFound();
+
+            // double.TryParse(defaultAmount, out var amount);
+
+            // var model = new WalletSendModel
+            // {
+            //     CryptoCode = walletId.CryptoCode,
+            //     ReturnUrl = returnUrl ?? HttpContext.Request.GetTypedHeaders().Referer?.AbsolutePath,
+            //     IsMultiSigOnServer = paymentMethod.IsMultiSigOnServer,
+            //     AlwaysIncludeNonWitnessUTXO = paymentMethod.DefaultIncludeNonWitnessUtxo
+            // };
+            // if (bip21?.Any() is true)
+            // {
+            //     var messagePresent = TempData.HasStatusMessage();
+            //     foreach (var link in bip21)
+            //     {
+            //         if (!string.IsNullOrEmpty(link))
+            //         {
+            //             await LoadFromBIP21(walletId, model, link, network, messagePresent);
+            //         }
+            //     }
+            // }
+
+            // if (!(model.Outputs?.Any() is true))
+            // {
+            //     model.Outputs = new List<WalletSendModel.TransactionOutput>()
+            //     {
+            //         new WalletSendModel.TransactionOutput()
+            //         {
+            //             Amount = Convert.ToDecimal(amount), DestinationAddress = defaultDestination
+            //         }
+            //     };
+            // }
+            // var recommendedFeesAsync = GetRecommendedFees(network, _feeRateProvider);
+            // var balance = _walletProvider.GetWallet(network).GetBalance(paymentMethod.AccountDerivation);
+            // model.NBXSeedAvailable = await GetSeed(walletId, network) != null;
+            // var Balance = await balance;
+            // model.CurrentBalance = (Balance.Available ?? Balance.Total).GetValue(network);
+            // if (Balance.Immature is null)
+            //     model.ImmatureBalance = 0;
+            // else
+            //     model.ImmatureBalance = Balance.Immature.GetValue(network);
+
+            // var recommendedFees = await recommendedFeesAsync;
+            // model.RecommendedSatoshiPerByte =
+            //     recommendedFees.Where(option => option != null).ToList();
+
+            // model.FeeSatoshiPerByte = recommendedFees.Skip(1).FirstOrDefault()?.FeeRate;
+            // model.CryptoDivisibility = network.Divisibility;
+
+            // try
+            // {
+            //     var r = await FetchRate(walletId);
+
+            //     model.Rate = r.Rate;
+            //     model.FiatDivisibility = _currencyTable.GetNumberFormatInfo(r.Fiat, true)
+            //         .CurrencyDecimalDigits;
+            //     model.Fiat = r.Fiat;
+            // }
+            // catch (Exception ex) { model.RateError = ex.Message; }
+
+            return View("/Views/Nano/NanoWalletSend.cshtml");
+        }
+
+        [HttpGet("{cryptoCode}/walletreceive")]
+        public IActionResult WalletReceive(string storeId, string cryptoCode)
+        {
+            // Your view reads Context.GetRouteValue("walletId").ToString();
+            // Ensure it's present to avoid a null.ToString() crash.
+            // if (!RouteData.Values.ContainsKey("walletId"))
+            //     RouteData.Values["walletId"] = "mockwallet";
+
+            var vm = new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel
+            {
+                CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
+                Address = null,      // null => shows the "Generate..." button
+                PaymentLink = null,
+                // Leave ReturnUrl null; your view computes it via Url.Action(...)
+                CryptoImage = Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png") // optional; remove if not available
+            };
+
+            // If your view file name is WalletReceive.cshtml under Views/UINanoLikeStore, this is fine:
+            // return View(vm);
+            // Otherwise: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
+            return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
+
+        }
+
+        [HttpPost("{cryptoCode}/walletreceive")]
+        [ValidateAntiForgeryToken]
+        public IActionResult WalletReceive(string storeId, string cryptoCode, [FromForm] string command, [FromForm] BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel vm)
+        {
+            // if (!RouteData.Values.ContainsKey("walletId"))
+            //     RouteData.Values["walletId"] = "mockwallet";
+            vm ??= new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel();
+            vm.CryptoCode = string.IsNullOrWhiteSpace(vm.CryptoCode)
+                ? (string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant())
+                : vm.CryptoCode;
+
+            vm.CryptoImage ??= Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png"); // optional
+
+            if (string.Equals(command, "generate-new-address", StringComparison.OrdinalIgnoreCase))
+            {
+                // Mock address and link
+                var mockAddress = "nano_3mockaddress1x9o7e9q7wz4y7p6r5s4t3u2v1w0x9y8z7a6b5c4d3e2f1";
+                vm.Address = mockAddress;
+                vm.PaymentLink = $"{vm.CryptoCode.ToLowerInvariant()}:{mockAddress}";
+            }
+
+            // return View(vm);
+            // Or: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
+            return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
+        }
+
+        [HttpGet("{cryptoCode}/walletsettings")]
+        [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
+        public async Task<IActionResult> WalletSettings(string storeId, string cryptoCode)
+        {
+            // var checkResult = IsAvailable(cryptoCode, out var store, out var network);
+            // if (checkResult != null)
+            // {
+            //     return checkResult;
+            // }
+
+            // var derivation = GetExistingDerivationStrategy(cryptoCode, store);
+            // if (derivation == null)
+            // {
+            //     return NotFound();
+            // }
+
+            // var storeBlob = store.GetStoreBlob();
+            // var excludeFilters = storeBlob.GetExcludedPaymentMethods();
+            // var perm = await CanUseHotWallet();
+            // var client = _explorerProvider.GetExplorerClient(network);
+
+            // var handler = _handlers.GetBitcoinHandler(cryptoCode);
+
+            // var vm = new WalletSettingsViewModel
+            // {
+            //     StoreId = storeId,
+            //     CryptoCode = cryptoCode,
+            //     WalletId = new WalletId(storeId, cryptoCode),
+            //     Enabled = !excludeFilters.Match(handler.PaymentMethodId),
+            //     Network = network,
+            //     IsHotWallet = derivation.IsHotWallet,
+            //     Source = derivation.Source,
+            //     RootFingerprint = derivation.GetFirstAccountKeySettings().RootFingerprint.ToString(),
+            //     DerivationScheme = derivation.AccountDerivation?.ToString(),
+            //     DerivationSchemeInput = derivation.AccountOriginal,
+            //     KeyPath = derivation.GetFirstAccountKeySettings().AccountKeyPath?.ToString(),
+            //     UriScheme = network.NBitcoinNetwork.UriScheme,
+            //     Label = derivation.Label,
+            //     NBXSeedAvailable = derivation.IsHotWallet &&
+            //                        perm.CanCreateHotWallet &&
+            //                        !string.IsNullOrEmpty(await client.GetMetadataAsync<string>(derivation.AccountDerivation,
+            //                            WellknownMetadataKeys.MasterHDKey)),
+            //     AccountKeys = (derivation.AccountKeySettings ?? [])
+            //         .Select(e => new WalletSettingsAccountKeyViewModel
+            //         {
+            //             AccountKey = e.AccountKey.ToString(),
+            //             MasterFingerprint = e.RootFingerprint is { } fp ? fp.ToString() : null,
+            //             AccountKeyPath = e.AccountKeyPath == null ? "" : $"m/{e.AccountKeyPath}"
+            //         }).ToList(),
+            //     Config = _dataProtector.ProtectString(JToken.FromObject(derivation, handler.Serializer).ToString()),
+            //     PayJoinEnabled = storeBlob.PayJoinEnabled,
+            //     CanUsePayJoin = perm.CanCreateHotWallet && network.SupportPayJoin && derivation.IsHotWallet,
+            //     CanUseHotWallet = perm.CanCreateHotWallet,
+            //     CanUseRPCImport = perm.CanRPCImport,
+            //     StoreName = store.StoreName,
+            //     CanSetupMultiSig = (derivation.AccountKeySettings ?? []).Length > 1,
+            //     IsMultiSigOnServer = derivation.IsMultiSigOnServer,
+            //     DefaultIncludeNonWitnessUtxo = derivation.DefaultIncludeNonWitnessUtxo
+            // };
+
+            // ViewData["ReplaceDescription"] = WalletReplaceWarning(derivation.IsHotWallet);
+            // ViewData["RemoveDescription"] = WalletRemoveWarning(derivation.IsHotWallet, network.CryptoCode);
+
+            // return View(vm);
+            return View("/Views/Nano/NanoWalletSettings.cshtml");
+        }
         private void Exec(string cmd)
         {
 
