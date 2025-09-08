@@ -111,48 +111,27 @@ public class NanoPlugin : BaseBTCPayServerPlugin
 
         foreach (var nanoLikeSpecificBtcPayNetwork in supportedNetworks)
         {
-            var daemonUri =
-                configuration.GetOrDefault<Uri>($"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_daemon_uri",
-                    null);
-            var walletDaemonUri =
+
+            var rpcUri =
                 configuration.GetOrDefault<Uri>(
-                    $"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_wallet_daemon_uri", null);
-            var cashCowWalletDaemonUri =
-                configuration.GetOrDefault<Uri>(
-                    $"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_cashcow_wallet_daemon_uri", null);
-            var walletDaemonWalletDirectory =
-                configuration.GetOrDefault<string>(
-                    $"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_wallet_daemon_walletdir", null);
-            var daemonUsername =
-                configuration.GetOrDefault<string>(
-                    $"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_daemon_username", null);
-            var daemonPassword =
-                configuration.GetOrDefault<string>(
-                    $"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_daemon_password", null);
-            if (daemonUri == null || walletDaemonUri == null)
+                    $"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_rpc_uri", null);
+
+            if (rpcUri == null)
             {
                 var logger = serviceProvider.GetRequiredService<ILogger<NanoPlugin>>();
                 var cryptoCode = nanoLikeSpecificBtcPayNetwork.CryptoCode.ToUpperInvariant();
-                if (daemonUri is null)
+                if (rpcUri is null)
                 {
                     logger.LogWarning($"BTCPAY_{cryptoCode}_DAEMON_URI is not configured");
                 }
-                if (walletDaemonUri is null)
-                {
-                    logger.LogWarning($"BTCPAY_{cryptoCode}_WALLET_DAEMON_URI is not configured");
-                }
+
                 logger.LogWarning($"{cryptoCode} got disabled as it is not fully configured.");
             }
             else
             {
                 result.NanoLikeConfigurationItems.Add(nanoLikeSpecificBtcPayNetwork.CryptoCode, new NanoLikeConfigurationItem()
                 {
-                    DaemonRpcUri = daemonUri,
-                    Username = daemonUsername,
-                    Password = daemonPassword,
-                    InternalWalletRpcUri = walletDaemonUri,
-                    WalletDirectory = walletDaemonWalletDirectory,
-                    CashCowWalletRpcUri = cashCowWalletDaemonUri,
+                    RpcUri = rpcUri,
                 });
             }
         }

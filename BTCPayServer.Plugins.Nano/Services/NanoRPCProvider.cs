@@ -22,8 +22,8 @@ namespace BTCPayServer.Plugins.Nano.Services
         private readonly ILogger<NanoRPCProvider> _logger;
         private readonly EventAggregator _eventAggregator;
         private readonly BTCPayServerEnvironment environment;
-        public ImmutableDictionary<string, JsonRpcClient> DaemonRpcClients;
-        public ImmutableDictionary<string, JsonRpcClient> WalletRpcClients;
+        public ImmutableDictionary<string, JsonRpcClient> RpcClients;
+        // public ImmutableDictionary<string, JsonRpcClient> WalletRpcClients;
 
         private readonly ConcurrentDictionary<string, NanoLikeSummary> _summaries = new();
 
@@ -38,27 +38,24 @@ namespace BTCPayServer.Plugins.Nano.Services
             _logger = logger;
             _eventAggregator = eventAggregator;
             this.environment = environment;
-            DaemonRpcClients =
+            RpcClients =
                 _nanoLikeConfiguration.NanoLikeConfigurationItems.ToImmutableDictionary(pair => pair.Key,
-                    pair => new JsonRpcClient(pair.Value.DaemonRpcUri, pair.Value.Username, pair.Value.Password,
+                    pair => new JsonRpcClient(pair.Value.RpcUri,
                         httpClientFactory.CreateClient($"{pair.Key}client")));
-            WalletRpcClients =
-                _nanoLikeConfiguration.NanoLikeConfigurationItems.ToImmutableDictionary(pair => pair.Key,
-                    pair => new JsonRpcClient(pair.Value.InternalWalletRpcUri, "", "",
-                        httpClientFactory.CreateClient($"{pair.Key}client")));
-            if (environment.CheatMode)
-            {
-                CashCowWalletRpcClients =
-                    _nanoLikeConfiguration.NanoLikeConfigurationItems
-                        .Where(i => i.Value.CashCowWalletRpcUri is not null).ToImmutableDictionary(pair => pair.Key,
-                            pair => new JsonRpcClient(pair.Value.CashCowWalletRpcUri, "", "",
-                                httpClientFactory.CreateClient($"{pair.Key}cashcow-client")));
-            }
+
+            // if (environment.CheatMode)
+            // {
+            //     CashCowWalletRpcClients =
+            //         _nanoLikeConfiguration.NanoLikeConfigurationItems
+            //             .Where(i => i.Value.CashCowWalletRpcUri is not null).ToImmutableDictionary(pair => pair.Key,
+            //                 pair => new JsonRpcClient(pair.Value.CashCowWalletRpcUri, "", "",
+            //                     httpClientFactory.CreateClient($"{pair.Key}cashcow-client")));
+            // }
         }
 
         public ImmutableDictionary<string, JsonRpcClient> CashCowWalletRpcClients { get; set; }
 
-        public bool IsConfigured(string cryptoCode) => WalletRpcClients.ContainsKey(cryptoCode) && DaemonRpcClients.ContainsKey(cryptoCode);
+        public bool IsConfigured(string cryptoCode) => RpcClients.ContainsKey(cryptoCode);
         public bool IsAvailable(string cryptoCode)
         {
             cryptoCode = cryptoCode.ToUpperInvariant();
@@ -73,8 +70,7 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         public async Task<NanoLikeSummary> UpdateSummary(string cryptoCode)
         {
-            if (!DaemonRpcClients.TryGetValue(cryptoCode.ToUpperInvariant(), out var daemonRpcClient) ||
-                !WalletRpcClients.TryGetValue(cryptoCode.ToUpperInvariant(), out var walletRpcClient))
+            if (!RpcClients.TryGetValue(cryptoCode.ToUpperInvariant(), out var RpcClient))
             {
                 return null;
             }
@@ -83,7 +79,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             try
             {
                 var daemonResult =
-                    await daemonRpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, GetInfoResponse>("get_info",
+                    await RpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, GetInfoResponse>("get_info",
                         JsonRpcClient.NoRequestModel.Instance);
                 summary.TargetHeight = daemonResult.TargetHeight.GetValueOrDefault(0);
                 summary.CurrentHeight = daemonResult.Height;
@@ -102,14 +98,14 @@ namespace BTCPayServer.Plugins.Nano.Services
             try
             {
                 var walletResult =
-                    await walletRpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, GetHeightResponse>(
+                    await RpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, GetHeightResponse>(
                         "get_height", JsonRpcClient.NoRequestModel.Instance);
                 summary.WalletHeight = walletResult.Height;
                 summary.WalletAvailable = true;
             }
             catch when (environment.CheatMode && !walletCreated)
             {
-                await CreateTestWallet(walletRpcClient);
+                await CreateTestWallet(RpcClient);
                 walletCreated = true;
                 goto retry;
             }
@@ -118,11 +114,11 @@ namespace BTCPayServer.Plugins.Nano.Services
                 summary.WalletAvailable = false;
             }
 
-            if (environment.CheatMode &&
-                CashCowWalletRpcClients.TryGetValue(cryptoCode.ToUpperInvariant(), out var cashCow))
-            {
-                await MakeCashCowFat(cashCow, daemonRpcClient);
-            }
+            // if (environment.CheatMode &&
+            //     CashCowWalletRpcClients.TryGetValue(cryptoCode.ToUpperInvariant(), out var cashCow))
+            // {
+            //     await MakeCashCowFat(cashCow, daemonRpcClient);
+            // }
 
             var changed = !_summaries.ContainsKey(cryptoCode) || IsAvailable(cryptoCode) != IsAvailable(summary);
 
@@ -135,45 +131,45 @@ namespace BTCPayServer.Plugins.Nano.Services
             return summary;
         }
 
-        private async Task MakeCashCowFat(JsonRpcClient cashcow, JsonRpcClient deamon)
+        // private async Task MakeCashCowFat(JsonRpcClient cashcow, JsonRpcClient deamon)
+        // {
+        //     try
+        //     {
+        //         var walletResult =
+        //             await cashcow.SendCommandAsync<JsonRpcClient.NoRequestModel, GetHeightResponse>(
+        //                 "get_height", JsonRpcClient.NoRequestModel.Instance);
+        //     }
+        //     catch
+        //     {
+        //         _logger.LogInformation("Creating XNO cashcow wallet...");
+        //         await CreateTestWallet(cashcow);
+        //     }
+
+        //     var balance =
+        //         (await cashcow.SendCommandAsync<JsonRpcClient.NoRequestModel, GetBalanceResponse>("get_balance",
+        //             JsonRpcClient.NoRequestModel.Instance));
+        //     if (balance.UnlockedBalance != 0)
+        //     {
+        //         return;
+        //     }
+        //     _logger.LogInformation("Mining blocks for the cashcow...");
+        //     var address = (await cashcow.SendCommandAsync<GetAddressRequest, GetAddressResponse>("get_address", new()
+        //     {
+        //         AccountIndex = 0
+        //     })).Address;
+        //     await deamon.SendCommandAsync<GenerateBlocks, JsonRpcClient.NoRequestModel>("generateblocks", new GenerateBlocks()
+        //     {
+        //         WalletAddress = address,
+        //         AmountOfBlocks = 100
+        //     });
+        //     _logger.LogInformation("Mining succeed!");
+        // }
+
+        private static async Task CreateTestWallet(JsonRpcClient RpcClient)
         {
             try
             {
-                var walletResult =
-                    await cashcow.SendCommandAsync<JsonRpcClient.NoRequestModel, GetHeightResponse>(
-                        "get_height", JsonRpcClient.NoRequestModel.Instance);
-            }
-            catch
-            {
-                _logger.LogInformation("Creating XNO cashcow wallet...");
-                await CreateTestWallet(cashcow);
-            }
-
-            var balance =
-                (await cashcow.SendCommandAsync<JsonRpcClient.NoRequestModel, GetBalanceResponse>("get_balance",
-                    JsonRpcClient.NoRequestModel.Instance));
-            if (balance.UnlockedBalance != 0)
-            {
-                return;
-            }
-            _logger.LogInformation("Mining blocks for the cashcow...");
-            var address = (await cashcow.SendCommandAsync<GetAddressRequest, GetAddressResponse>("get_address", new()
-            {
-                AccountIndex = 0
-            })).Address;
-            await deamon.SendCommandAsync<GenerateBlocks, JsonRpcClient.NoRequestModel>("generateblocks", new GenerateBlocks()
-            {
-                WalletAddress = address,
-                AmountOfBlocks = 100
-            });
-            _logger.LogInformation("Mining succeed!");
-        }
-
-        private static async Task CreateTestWallet(JsonRpcClient walletRpcClient)
-        {
-            try
-            {
-                await walletRpcClient.SendCommandAsync<OpenWalletRequest, JsonRpcClient.NoRequestModel>(
+                await RpcClient.SendCommandAsync<OpenWalletRequest, JsonRpcClient.NoRequestModel>(
                     "open_wallet",
                     new OpenWalletRequest()
                     {
@@ -187,7 +183,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                 // ignored
             }
 
-            await walletRpcClient.SendCommandAsync<CreateWalletRequest, JsonRpcClient.NoRequestModel>("create_wallet",
+            await RpcClient.SendCommandAsync<CreateWalletRequest, JsonRpcClient.NoRequestModel>("create_wallet",
                 new()
                 {
                     Filename = "wallet",

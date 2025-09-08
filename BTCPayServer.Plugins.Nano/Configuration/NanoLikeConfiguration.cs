@@ -10,12 +10,7 @@ namespace BTCPayServer.Plugins.Nano.Configuration
 
     public class NanoLikeConfigurationItem
     {
-        public Uri DaemonRpcUri { get; set; }
-        public Uri InternalWalletRpcUri { get; set; }
-        public string WalletDirectory { get; set; }
-        // TODO: Check if username password is necessary
-        public string Username { get; set; }
-        public string Password { get; set; }
-        public Uri CashCowWalletRpcUri { get; set; }
+        public Uri RpcUri { get; set; }
+
     }
 }

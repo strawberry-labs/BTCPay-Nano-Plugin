@@ -13,20 +13,20 @@ namespace BTCPayServer.Plugins.Nano.RPC
     public class JsonRpcClient
     {
         private readonly Uri _address;
-        private readonly string _username;
-        private readonly string _password;
+        // private readonly string _username;
+        // private readonly string _password;
         private readonly HttpClient _httpClient;
 
-        public JsonRpcClient(Uri address, string username, string password, HttpClient client = null)
+        public JsonRpcClient(Uri address, HttpClient client = null)
         {
             _address = address;
-            _username = username;
-            _password = password;
+            // _username = username;
+            // _password = password;
             _httpClient = client ?? new HttpClient();
         }
 
 
-        public async Task<TResponse> SendCommandAsync<TRequest, TResponse>(string method, TRequest data,
+        public async Task<TResponse> SendCommandAsync<TRequest, TResponse>(string action, TRequest data,
             CancellationToken cts = default)
         {
             var jsonSerializer = new JsonSerializerSettings
@@ -36,15 +36,16 @@ namespace BTCPayServer.Plugins.Nano.RPC
             var httpRequest = new HttpRequestMessage()
             {
                 Method = HttpMethod.Post,
-                RequestUri = new Uri(_address, "json_rpc"),
+                // RequestUri = new Uri(_address),
+                RequestUri = _address,
                 Content = new StringContent(
-                    JsonConvert.SerializeObject(new JsonRpcCommand<TRequest>(method, data), jsonSerializer),
+                    JsonConvert.SerializeObject(new JsonRpcCommand<TRequest>(action, data), jsonSerializer),
                     Encoding.UTF8, "application/json")
             };
             httpRequest.Headers.Accept.Clear();
             httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic",
-                Convert.ToBase64String(Encoding.Default.GetBytes($"{_username}:{_password}")));
+            // httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic",
+            //     Convert.ToBase64String(Encoding.Default.GetBytes($"{_username}:{_password}")));
 
             HttpResponseMessage rawResult = await _httpClient.SendAsync(httpRequest, cts);
             rawResult.EnsureSuccessStatusCode();
@@ -104,7 +105,7 @@ namespace BTCPayServer.Plugins.Nano.RPC
         {
             [JsonProperty("jsonRpc")] public string JsonRpc { get; set; } = "2.0";
             [JsonProperty("id")] public string Id { get; set; } = Guid.NewGuid().ToString();
-            [JsonProperty("method")] public string Method { get; set; }
+            [JsonProperty("action")] public string Action { get; set; }
 
             [JsonProperty("params")] public T Parameters { get; set; }
 
@@ -112,9 +113,9 @@ namespace BTCPayServer.Plugins.Nano.RPC
             {
             }
 
-            public JsonRpcCommand(string method, T parameters)
+            public JsonRpcCommand(string action, T parameters)
             {
-                Method = method;
+                Action = action;
                 Parameters = parameters;
             }
         }

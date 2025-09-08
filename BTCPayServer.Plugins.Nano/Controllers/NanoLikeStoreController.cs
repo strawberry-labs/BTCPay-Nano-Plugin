@@ -84,7 +84,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary) && summary.WalletAvailable)
                 {
 
-                    return _NanoRpcProvider.WalletRpcClients[cryptoCode].SendCommandAsync<GetAccountsRequest, GetAccountsResponse>("get_accounts", new GetAccountsRequest());
+                    return _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<GetAccountsRequest, GetAccountsResponse>("get_accounts", new GetAccountsRequest());
                 }
             }
             catch
@@ -239,7 +239,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             {
                 try
                 {
-                    var newAccount = await _NanoRpcProvider.WalletRpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("create_account", new CreateAccountRequest()
+                    var newAccount = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("create_account", new CreateAccountRequest()
                     {
                         Label = viewModel.NewAccountLabel
                     });
@@ -264,11 +264,11 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                     ModelState.AddModelError(nameof(viewModel.WalletKeysFile), StringLocalizer["Please select the view-only wallet keys file"]);
                     valid = false;
                 }
-                if (configurationItem.WalletDirectory == null)
-                {
-                    ModelState.AddModelError(nameof(viewModel.WalletFile), StringLocalizer["This installation doesn't support wallet import (BTCPAY_XMR_WALLET_DAEMON_WALLETDIR is not set)"]);
-                    valid = false;
-                }
+                // if (configurationItem.WalletDirectory == null)
+                // {
+                //     ModelState.AddModelError(nameof(viewModel.WalletFile), StringLocalizer["This installation doesn't support wallet import (BTCPAY_XMR_WALLET_DAEMON_WALLETDIR is not set)"]);
+                //     valid = false;
+                // }
                 if (valid)
                 {
                     if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary))
@@ -285,51 +285,51 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                         }
                     }
 
-                    var fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet");
-                    using (var fileStream = new FileStream(fileAddress, FileMode.Create))
-                    {
-                        await viewModel.WalletFile.CopyToAsync(fileStream);
-                        try
-                        {
-                            Exec($"chmod 666 {fileAddress}");
-                        }
-                        catch
-                        {
-                            // ignored
-                        }
-                    }
+                    // var fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet");
+                    // using (var fileStream = new FileStream(fileAddress, FileMode.Create))
+                    // {
+                    //     await viewModel.WalletFile.CopyToAsync(fileStream);
+                    //     try
+                    //     {
+                    //         Exec($"chmod 666 {fileAddress}");
+                    //     }
+                    //     catch
+                    //     {
+                    //         // ignored
+                    //     }
+                    // }
 
-                    fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet.keys");
-                    using (var fileStream = new FileStream(fileAddress, FileMode.Create))
-                    {
-                        await viewModel.WalletKeysFile.CopyToAsync(fileStream);
-                        try
-                        {
-                            Exec($"chmod 666 {fileAddress}");
-                        }
-                        catch
-                        {
-                            // ignored
-                        }
-                    }
+                    // fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet.keys");
+                    // using (var fileStream = new FileStream(fileAddress, FileMode.Create))
+                    // {
+                    //     await viewModel.WalletKeysFile.CopyToAsync(fileStream);
+                    //     try
+                    //     {
+                    //         Exec($"chmod 666 {fileAddress}");
+                    //     }
+                    //     catch
+                    //     {
+                    //         // ignored
+                    //     }
+                    // }
 
-                    fileAddress = Path.Combine(configurationItem.WalletDirectory, "password");
-                    using (var fileStream = new StreamWriter(fileAddress, false))
-                    {
-                        await fileStream.WriteAsync(viewModel.WalletPassword);
-                        try
-                        {
-                            Exec($"chmod 666 {fileAddress}");
-                        }
-                        catch
-                        {
-                            // ignored
-                        }
-                    }
+                    // fileAddress = Path.Combine(configurationItem.WalletDirectory, "password");
+                    // using (var fileStream = new StreamWriter(fileAddress, false))
+                    // {
+                    //     await fileStream.WriteAsync(viewModel.WalletPassword);
+                    //     try
+                    //     {
+                    //         Exec($"chmod 666 {fileAddress}");
+                    //     }
+                    //     catch
+                    //     {
+                    //         // ignored
+                    //     }
+                    // }
 
                     try
                     {
-                        var response = await _NanoRpcProvider.WalletRpcClients[cryptoCode].SendCommandAsync<OpenWalletRequest, OpenWalletResponse>("open_wallet", new OpenWalletRequest
+                        var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<OpenWalletRequest, OpenWalletResponse>("open_wallet", new OpenWalletRequest
                         {
                             Filename = "wallet",
                             Password = viewModel.WalletPassword
@@ -365,7 +365,8 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 vm.AccountIndex = viewModel.AccountIndex;
                 vm.SettlementConfirmationThresholdChoice = viewModel.SettlementConfirmationThresholdChoice;
                 vm.CustomSettlementConfirmationThreshold = viewModel.CustomSettlementConfirmationThreshold;
-                vm.SupportWalletExport = configurationItem.WalletDirectory is not null;
+                // vm.SupportWalletExport = configurationItem.WalletDirectory is not null;
+                vm.SupportWalletExport = false;
                 return View("/Views/Nano/GetStoreNanoLikePaymentMethod.cshtml", vm);
             }
 
