@@ -25,7 +25,7 @@ NanoLikeConfiguration.NanoLikeConfigurationItems.Any())
         cryptoCode.ToString() == item.CryptoCode;
         <li class="nav-item">
             <a class="nav-link @(isActive ? "active" : "")" asp-route-cryptoCode="@item.CryptoCode" asp-route-storeId="@storeId"
-                asp-action="GetStoreNanoLikePaymentMethod" asp-controller="UINanoLikeStore">
+                asp-action="WalletTransaction" asp-controller="UINanoLikeStore">
                 <span class="me-2 btcpay-status btcpay-status--@(item.Enabled ? "enabled" : "pending")"></span>
                 <span>Nano</span>
             </a>

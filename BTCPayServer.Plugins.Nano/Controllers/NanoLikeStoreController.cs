@@ -144,19 +144,84 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         }
 
         [HttpGet("{cryptoCode}")]
-        public async Task<IActionResult> GetStoreNanoLikePaymentMethod(string cryptoCode)
+        public async Task<IActionResult> WalletTransaction(string cryptoCode)
         {
             cryptoCode = cryptoCode.ToUpperInvariant();
             if (!_NanoLikeConfiguration.NanoLikeConfigurationItems.ContainsKey(cryptoCode))
             {
-                Console.WriteLine("ABCD HERE Errored");
                 Console.WriteLine(_NanoLikeConfiguration.NanoLikeConfigurationItems);
                 return NotFound();
             }
 
-            var vm = GetNanoLikePaymentMethodViewModel(StoreData, cryptoCode,
-                StoreData.GetStoreBlob().GetExcludedPaymentMethods(), await GetAccounts(cryptoCode));
-            return View("/Views/Nano/GetStoreNanoLikePaymentMethod.cshtml", vm);
+            // var vm = GetNanoLikePaymentMethodViewModel(StoreData, cryptoCode,
+            //     StoreData.GetStoreBlob().GetExcludedPaymentMethods(), await GetAccounts(cryptoCode));
+
+            var rateUsdPerNano = 7.25m;
+
+            var vm = new NanoListTransactionsViewModel
+            {
+                // WalletId = walletId,
+                CryptoCode = "XNO",
+                Page = 1,
+                PageSize = 50,
+                CurrentBalanceNano = 13.234m
+            };
+
+            vm.Labels.Add(("Deposit", "#E3F2FD", "#0D47A1"));
+            vm.Labels.Add(("Withdrawal", "#FCE4EC", "#AD1457"));
+            vm.Labels.Add(("Invoice", "#E8F5E9", "#1B5E20"));
+
+            vm.Transactions.Add(MakeTx(
+            timestamp: DateTimeOffset.UtcNow.AddMinutes(-5),
+            confirmed: true,
+            positive: true,
+            nanoAmount: 1.234m,
+            address: "nano_3receiveaddress11111111111111111111111111111111111111111",
+            comment: "Payment for Invoice #1234",
+            tags: new[] { "Invoice", "customer:ALPHA" },
+            rate: rateUsdPerNano));
+
+            vm.Total = vm.Transactions.Count;
+
+            return View("/Views/Nano/NanoWalletTransactions.cshtml", vm);
+        }
+
+        private static NanoListTransactionsViewModel.TransactionViewModel MakeTx(
+        DateTimeOffset timestamp,
+        bool confirmed,
+        bool positive,
+        decimal nanoAmount,
+        string address,
+        string comment,
+        IEnumerable<string> tags,
+        decimal? rate)
+        {
+            var id = "MOCK_" + Guid.NewGuid().ToString("N").Substring(0, 16);
+            var signedAmount = positive ? nanoAmount : -nanoAmount;
+            var fiat = rate.HasValue ? signedAmount * rate.Value : (decimal?)null;
+
+            return new NanoListTransactionsViewModel.TransactionViewModel
+            {
+                Timestamp = timestamp,
+                IsConfirmed = confirmed,
+                Positive = positive,
+                Comment = comment,
+                Id = id,
+                Link = $"https://nanolooker.com/block/{id}",
+                Address = address,
+                Amount = FormatNanoAmount(signedAmount),
+                Tags = new List<string>(tags),
+                Rate = rate,
+                FiatAmount = fiat,
+                FiatCode = "USD"
+            };
+        }
+
+        private static string FormatNanoAmount(decimal signedAmount)
+        {
+            var sign = signedAmount >= 0 ? "+" : "-";
+            var abs = Math.Abs(signedAmount);
+            return $"{sign}{abs.ToString("N6", CultureInfo.InvariantCulture)} NANO";
         }
 
         [HttpPost("{cryptoCode}")]
