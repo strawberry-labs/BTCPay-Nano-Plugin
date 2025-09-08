@@ -1,17 +1,33 @@
 @using BTCPayServer.Plugins.Nano.Configuration
 @using BTCPayServer.Plugins.Nano.Controllers
 @using BTCPayServer.Abstractions.Contracts
+@using Newtonsoft.Json.Linq
+@using BTCPayServer;
+@using BTCPayServer.Services.Stores
+@using BTCPayServer.Payments
+
 @inject SignInManager<ApplicationUser> SignInManager;
 @inject NanoLikeConfiguration NanoLikeConfiguration;
 @inject IScopeProvider ScopeProvider
 @inject UINanoLikeStoreController UINanoLikeStore;
 @{
     var storeId = ScopeProvider.GetCurrentStoreId();
+    var store = Context.GetStoreData();
+
+    bool enabled = false;
+    // TODO: Later get the code from some source
+    var pmi = PaymentTypes.CHAIN.GetPaymentMethodId("XNO");
+    var configs = store?.GetPaymentMethodConfigs();
+
+    if (configs != null && configs.TryGetValue(pmi, out var token) && token is JObject o)
+    {
+        enabled = o.TryGetValue("Enabled", out var v) && v.Type == JTokenType.Boolean && v.Value<bool>();
+    }
 }
+
 @if (SignInManager.IsSignedIn(User) && User.IsInRole(Roles.ServerAdmin) &&
 NanoLikeConfiguration.NanoLikeConfigurationItems.Any())
 {
-    var store = Context.GetStoreData();
     var result = await UINanoLikeStore.GetVM(store);
 
     foreach (var item in result.Items)
@@ -26,7 +42,7 @@ NanoLikeConfiguration.NanoLikeConfigurationItems.Any())
         <li class="nav-item">
             <a class="nav-link @(isActive ? "active" : "")" asp-route-cryptoCode="@item.CryptoCode" asp-route-storeId="@storeId"
                 asp-action="WalletTransaction" asp-controller="UINanoLikeStore">
-                <span class="me-2 btcpay-status btcpay-status--@(item.Enabled ? "enabled" : "pending")"></span>
+                <span class="me-2 btcpay-status btcpay-status--@(enabled ? "enabled" : "pending")"></span>
                 <span>Nano</span>
             </a>
         </li>

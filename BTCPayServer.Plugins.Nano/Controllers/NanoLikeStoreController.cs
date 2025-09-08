@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 using BTCPayServer.Abstractions.Constants;
 using BTCPayServer.Abstractions.Extensions;
@@ -483,7 +484,17 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         [HttpGet("{cryptoCode}/walletsettings")]
         public IActionResult WalletSettings(string storeId, string cryptoCode)
         {
+
             var code = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant();
+            var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(code);
+            var cfg = StoreData.GetPaymentMethodConfigs();
+
+            bool enabled = false;
+            if (cfg.TryGetValue(pmi, out var token) && token is JObject obj)
+            {
+                enabled = obj["Enabled"]?.Value<bool>() ?? false;
+            }
+
             var vm = new NanoWalletSettingsViewModel
             {
                 StoreId = storeId,
@@ -492,7 +503,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 UriScheme = code.ToLowerInvariant(), // e.g., "nano"
                 // WalletId = $"{storeId}-{code}",
 
-                Enabled = true,
+                Enabled = enabled,
                 // PayJoinEnabled = false,
                 // CanUsePayJoin = false,
                 // CanSetupMultiSig = false,
@@ -516,28 +527,47 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             return View("/Views/Nano/NanoWalletSettings.cshtml", vm); // or just: return View(vm);
         }
 
-        [HttpPost("{cryptoCode}/UpdateWalletSettings")]
+        [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult UpdateWalletSettings(string storeId, string cryptoCode, [FromForm] NanoWalletSettingsViewModel vm)
+        public async Task<IActionResult> UpdateEnabled(string storeId, string cryptoCode, bool enabled)
         {
-            var code = string.IsNullOrWhiteSpace(cryptoCode) ? "NANO" : cryptoCode.ToUpperInvariant();
+            var store = await _StoreRepository.FindStore(storeId);
+            if (store is null) return NotFound();
 
-            vm ??= new NanoWalletSettingsViewModel();
-            vm.StoreId ??= storeId;
-            vm.CryptoCode ??= code;
-            vm.UriScheme ??= code.ToLowerInvariant();
-            // vm.WalletId ??= $"{storeId}-{code}";
-            // vm.AccountKeys ??= new();
+            var code = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant();
+            var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(code);
+            var configs = store.GetPaymentMethodConfigs();
+            var obj = (configs.TryGetValue(pmi, out var token) && token is JObject o) ? o : new JObject();
+            obj["Enabled"] = enabled;
+            store.SetPaymentMethodConfig(pmi, obj);
 
-            ViewData["ReplaceDescription"] = $"This will disconnect the current {code} wallet from the store and start a new setup.";
-            ViewData["RemoveDescription"] = $"This will remove the {code} wallet from the store. You can add one again later.";
+            await _StoreRepository.UpdateStore(store);
 
-            // Normally you’d persist vm here; for mock/demo we just re-render the view.
-            // Optionally set a success message if you use a status message partial.
-            // TempData["StatusMessage"] = "Wallet settings updated.";
-
-            return View("/Views/Nano/NanoWalletSettings.cshtml", vm); // ensure it returns the same settings view
+            return RedirectToAction(nameof(WalletSettings), new { storeId, cryptoCode });
         }
+
+        // [HttpPost("{cryptoCode}/UpdateWalletSettings")]
+        // [ValidateAntiForgeryToken]
+        // public IActionResult UpdateWalletSettings(string storeId, string cryptoCode, [FromForm] NanoWalletSettingsViewModel vm)
+        // {
+        //     var code = string.IsNullOrWhiteSpace(cryptoCode) ? "NANO" : cryptoCode.ToUpperInvariant();
+
+        //     vm ??= new NanoWalletSettingsViewModel();
+        //     vm.StoreId ??= storeId;
+        //     vm.CryptoCode ??= code;
+        //     vm.UriScheme ??= code.ToLowerInvariant();
+        //     // vm.WalletId ??= $"{storeId}-{code}";
+        //     // vm.AccountKeys ??= new();
+
+        //     ViewData["ReplaceDescription"] = $"This will disconnect the current {code} wallet from the store and start a new setup.";
+        //     ViewData["RemoveDescription"] = $"This will remove the {code} wallet from the store. You can add one again later.";
+
+        //     // Normally you’d persist vm here; for mock/demo we just re-render the view.
+        //     // Optionally set a success message if you use a status message partial.
+        //     // TempData["StatusMessage"] = "Wallet settings updated.";
+
+        //     return View("/Views/Nano/NanoWalletSettings.cshtml", vm); // ensure it returns the same settings view
+        // }
         private void Exec(string cmd)
         {
 
