@@ -46,7 +46,7 @@
 
                 <div class="dropdown-divider"></div> *@
 
-                <a asp-controller="UINanoLikeStore" asp-action="ReplaceWallet" asp-route-storeId="@Model.StoreId"
+                @* <a asp-controller="UINanoLikeStore" asp-action="ReplaceWallet" asp-route-storeId="@Model.StoreId"
                     asp-route-cryptoCode="@Model.CryptoCode" id="ChangeWalletLink" class="dropdown-item"
                     data-bs-toggle="modal" data-bs-target="#ConfirmModal"
                     data-title="@StringLocalizer["Replace {0} wallet", Model.CryptoCode]"
@@ -54,7 +54,7 @@
                     data-confirm="@StringLocalizer["Setup new wallet"]" data-confirm-input="@StringLocalizer["REPLACE"]"
                     text-translate="true">
                     Replace wallet
-                </a>
+                </a> *@
                 <form method="get" asp-action="DeleteWallet" asp-route-storeId="@Model.StoreId"
                     asp-route-cryptoCode="@Model.CryptoCode" class="d-inline">
                     <button type="submit" id="Delete" class="dropdown-item" data-bs-toggle="modal"

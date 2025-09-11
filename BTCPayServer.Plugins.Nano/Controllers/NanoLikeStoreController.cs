@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using System.Text.Encodings.Web;
 
 using BTCPayServer.Abstractions.Constants;
 using BTCPayServer.Abstractions.Extensions;
@@ -21,6 +22,7 @@ using BTCPayServer.Plugins.Nano.Services;
 using BTCPayServer.Plugins.Nano.ViewModels;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Stores;
+using BTCPayServer.Security;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -41,17 +43,19 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         private readonly NanoRPCProvider _NanoRpcProvider;
         private readonly PaymentMethodHandlerDictionary _handlers;
         private IStringLocalizer StringLocalizer { get; }
+        private readonly HtmlEncoder _html;
 
         public UINanoLikeStoreController(NanoLikeConfiguration nanoLikeConfiguration,
             StoreRepository storeRepository, NanoRPCProvider nanoRpcProvider,
             PaymentMethodHandlerDictionary handlers,
-            IStringLocalizer stringLocalizer)
+            IStringLocalizer stringLocalizer, HtmlEncoder html)
         {
             _NanoLikeConfiguration = nanoLikeConfiguration;
             _StoreRepository = storeRepository;
             _NanoRpcProvider = nanoRpcProvider;
             _handlers = handlers;
             StringLocalizer = stringLocalizer;
+            _html = html;
         }
 
         public StoreData StoreData => HttpContext.GetStoreData();
@@ -546,28 +550,72 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             return RedirectToAction(nameof(WalletSettings), new { storeId, cryptoCode });
         }
 
-        // [HttpPost("{cryptoCode}/UpdateWalletSettings")]
-        // [ValidateAntiForgeryToken]
-        // public IActionResult UpdateWalletSettings(string storeId, string cryptoCode, [FromForm] NanoWalletSettingsViewModel vm)
-        // {
-        //     var code = string.IsNullOrWhiteSpace(cryptoCode) ? "NANO" : cryptoCode.ToUpperInvariant();
+        [HttpGet("/onchain/{cryptoCode}/delete")]
+        [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
+        public ActionResult DeleteWallet(string storeId, string cryptoCode)
+        {
+            // Check wallet ID is present in settings
+            // If not present, break
 
-        //     vm ??= new NanoWalletSettingsViewModel();
-        //     vm.StoreId ??= storeId;
-        //     vm.CryptoCode ??= code;
-        //     vm.UriScheme ??= code.ToLowerInvariant();
-        //     // vm.WalletId ??= $"{storeId}-{code}";
-        //     // vm.AccountKeys ??= new();
+            return View("Confirm", new ConfirmModel
+            {
+                Title = StringLocalizer["Remove Nano wallet"],
+                Description = WalletRemoveWarning(true),
+                DescriptionHtml = true,
+                Action = StringLocalizer["Remove"]
+            });
+        }
 
-        //     ViewData["ReplaceDescription"] = $"This will disconnect the current {code} wallet from the store and start a new setup.";
-        //     ViewData["RemoveDescription"] = $"This will remove the {code} wallet from the store. You can add one again later.";
+        [HttpPost("/onchain/{cryptoCode}/delete")]
+        [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
+        public async Task<IActionResult> ConfirmDeleteWallet(string storeId, string cryptoCode)
+        {
+            // Check wallet ID is present in settings
+            // If not present, break
 
-        //     // Normally you’d persist vm here; for mock/demo we just re-render the view.
-        //     // Optionally set a success message if you use a status message partial.
-        //     // TempData["StatusMessage"] = "Wallet settings updated.";
+            // store.SetPaymentMethodConfig(PaymentTypes.CHAIN.GetPaymentMethodId(network.CryptoCode), null);
 
-        //     return View("/Views/Nano/NanoWalletSettings.cshtml", vm); // ensure it returns the same settings view
-        // }
+            // await _storeRepo.UpdateStore(store);
+            // _eventAggregator.Publish(new WalletChangedEvent { WalletId = new WalletId(storeId, cryptoCode) });
+
+            // WalletDestroyResponse response;
+
+            // try
+            // {
+            //     response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<WalletDestroyRequest, WalletDestroyResponse>("wallet_destroy", new WalletDestroyRequest
+            //     {
+            //         Wallet = "51A154C12A8D1167D147FDC65BA071B03E0EDBA47BC75B79EC0BE1472B7A3265"
+            //     });
+            // }
+            // catch (Exception e)
+            // {
+            //     Console.WriteLine(e);
+            // }
+
+            // TempData[WellKnownTempData.SuccessMessage] =
+            //     $"On-Chain payment for {cryptoCode} has been removed.";
+
+            return RedirectToAction(nameof(WalletSettings), new { storeId, cryptoCode });
+        }
+
+        private string WalletRemoveWarning(bool isHotWallet)
+        {
+            return WalletWarning(isHotWallet,
+                $"The store won't be able to receive Nano onchain payments until a new wallet is set up.");
+        }
+
+        private string WalletWarning(bool isHotWallet, string info)
+        {
+            var walletType = isHotWallet ? "hot" : "watch-only";
+            var additionalText = isHotWallet
+                ? ""
+                : " or imported it into an external wallet. If you no longer have access to your private key (recovery seed), immediately replace the wallet";
+            return
+                $"<p class=\"text-danger fw-bold\">Please note that this is a <strong>{_html.Encode(walletType)} wallet</strong>!</p>" +
+                $"<p class=\"text-danger fw-bold\">Do not proceed if you have not backed up the wallet{_html.Encode(additionalText)}.</p>" +
+                $"<p class=\"text-start mb-0\">This action will erase the current wallet data from the server. {_html.Encode(info)}</p>";
+        }
+
         private void Exec(string cmd)
         {
 

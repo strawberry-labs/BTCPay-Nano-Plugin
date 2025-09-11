@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using Newtonsoft.Json.Linq;
 
 namespace BTCPayServer.Plugins.Nano.RPC
 {
@@ -33,13 +34,17 @@ namespace BTCPayServer.Plugins.Nano.RPC
             {
                 ContractResolver = new CamelCasePropertyNamesContractResolver()
             };
+
+            var payload = data != null ? JObject.FromObject(data) : new JObject();
+            payload["action"] = action;
+
             var httpRequest = new HttpRequestMessage()
             {
                 Method = HttpMethod.Post,
                 // RequestUri = new Uri(_address),
                 RequestUri = _address,
                 Content = new StringContent(
-                    JsonConvert.SerializeObject(new JsonRpcCommand<TRequest>(action, data), jsonSerializer),
+                    payload.ToString(Formatting.None),
                     Encoding.UTF8, "application/json")
             };
             httpRequest.Headers.Accept.Clear();
@@ -51,10 +56,18 @@ namespace BTCPayServer.Plugins.Nano.RPC
             rawResult.EnsureSuccessStatusCode();
             var rawJson = await rawResult.Content.ReadAsStringAsync();
 
-            JsonRpcResult<TResponse> response;
+            var token = JToken.Parse(rawJson);
+
+            var error = (token.Type == JTokenType.Object) ? token["error"]?.ToString() : null;
+            if (!string.IsNullOrEmpty(error))
+            {
+                throw new JsonRpcApiException(error);
+            }
+
+            TResponse response;
             try
             {
-                response = JsonConvert.DeserializeObject<JsonRpcResult<TResponse>>(rawJson, jsonSerializer);
+                response = token.ToObject<TResponse>();
             }
             catch (Exception e)
             {
@@ -63,15 +76,7 @@ namespace BTCPayServer.Plugins.Nano.RPC
                 throw;
             }
 
-            if (response.Error != null)
-            {
-                throw new JsonRpcApiException()
-                {
-                    Error = response.Error
-                };
-            }
-
-            return response.Result;
+            return response;
         }
 
         public class NoRequestModel
@@ -81,42 +86,11 @@ namespace BTCPayServer.Plugins.Nano.RPC
 
         public class JsonRpcApiException : Exception
         {
-            public JsonRpcResultError Error { get; set; }
+            [JsonProperty("error")] public string Error { get; set; }
 
-            public override string Message => Error?.Message;
-        }
-
-        public class JsonRpcResultError
-        {
-            [JsonProperty("code")] public int Code { get; set; }
-            [JsonProperty("message")] public string Message { get; set; }
-            [JsonProperty("data")] dynamic Data { get; set; }
-        }
-        internal class JsonRpcResult<T>
-        {
-
-
-            [JsonProperty("result")] public T Result { get; set; }
-            [JsonProperty("error")] public JsonRpcResultError Error { get; set; }
-            [JsonProperty("id")] public string Id { get; set; }
-        }
-
-        internal class JsonRpcCommand<T>
-        {
-            [JsonProperty("jsonRpc")] public string JsonRpc { get; set; } = "2.0";
-            [JsonProperty("id")] public string Id { get; set; } = Guid.NewGuid().ToString();
-            [JsonProperty("action")] public string Action { get; set; }
-
-            [JsonProperty("params")] public T Parameters { get; set; }
-
-            public JsonRpcCommand()
+            public JsonRpcApiException(string error)
             {
-            }
-
-            public JsonRpcCommand(string action, T parameters)
-            {
-                Action = action;
-                Parameters = parameters;
+                Error = error;
             }
         }
     }
