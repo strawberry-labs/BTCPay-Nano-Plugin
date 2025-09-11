@@ -31,7 +31,7 @@
 
             <!-- Modal For Actions DropDownToggle, need to be outside of form -->
             <div class="dropdown-menu" aria-labelledby="ActionsDropdownToggle">
-                <a class="dropdown-item" asp-controller="UINanoLikeStore" asp-action="WalletRescan" id="Rescan"
+                @* <a class="dropdown-item" asp-controller="UINanoLikeStore" asp-action="WalletRescan" id="Rescan"
                     text-translate="true">Rescan wallet for missing
                     transactions</a>
                 <form method="post" asp-controller="UINanoLikeStore" asp-action="WalletActions">
@@ -44,7 +44,7 @@
                     }
                 </form>
 
-                <div class="dropdown-divider"></div>
+                <div class="dropdown-divider"></div> *@
 
                 <a asp-controller="UINanoLikeStore" asp-action="ReplaceWallet" asp-route-storeId="@Model.StoreId"
                     asp-route-cryptoCode="@Model.CryptoCode" id="ChangeWalletLink" class="dropdown-item"
@@ -63,14 +63,14 @@
                         data-description="@ViewData["RemoveDescription"]" data-confirm="@StringLocalizer["Remove"]"
                         data-confirm-input="@StringLocalizer["REMOVE"]" text-translate="true">Remove wallet</button>
                 </form>
-                <form method="get" asp-action="DeleteWallet" asp-route-storeId="@Model.StoreId"
+                @* <form method="get" asp-action="DeleteWallet" asp-route-storeId="@Model.StoreId"
                     asp-route-cryptoCode="@Model.CryptoCode" class="d-inline">
                     <button type="submit" id="Delete" class="dropdown-item" data-bs-toggle="modal"
                         data-bs-target="#ConfirmModal"
                         data-title="@StringLocalizer["Remove {0} wallet", Model.CryptoCode]"
                         data-description="@ViewData["RemoveDescription"]" data-confirm="@StringLocalizer["Remove"]"
                         data-confirm-input="@StringLocalizer["REMOVE"]" text-translate="true">View Seed</button>
-                </form>
+                </form> *@
             </div>
         </div>
 

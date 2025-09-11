@@ -127,7 +127,7 @@
                     </select>
                     <vc:label-manager selected-labels="Model.Outputs[index].Labels" exclude-types="true"
                         select-element="Outputs_@(index)__Labels" @* wallet-object-id="new WalletObjectId(WalletId.Parse(walletId), WalletObjectData.Types.Address, Model.Outputs[index].DestinationAddress)" *@
-                   auto-update="false" />
+                     auto-update="false" />
                 </div>
                 <div class="form-group">
                     <label asp-for="Outputs[index].Amount" class="form-label"></label>
@@ -157,9 +157,9 @@
 
     <div class="d-grid d-sm-flex flex-wrap gap-3 buttons">
         <button type="submit" id="SignTransaction" name="command" value="sign" class="btn btn-primary"
-            text-translate="true">Sign transaction</button>
-        <button type="submit" id="ScheduleTransaction" name="command" value="schedule" class="btn btn-secondary"
-            text-translate="true">Schedule transaction</button>
+            text-translate="true">Send</button>
+        @* <button type="submit" id="ScheduleTransaction" name="command" value="schedule" class="btn btn-secondary"
+            text-translate="true">Schedule transaction</button> *@
 
     </div>
 </form>
