@@ -15,14 +15,14 @@
     var store = Context.GetStoreData();
 
     bool enabled = false;
+    bool walletEnabled = false;
     // TODO: Later get the code from some source
-    var pmi = PaymentTypes.CHAIN.GetPaymentMethodId("XNO");
-    var configs = store?.GetPaymentMethodConfigs();
+    var config = await UINanoLikeStore.getPaymentConfig(storeId, "XNO");
 
-    if (configs != null && configs.TryGetValue(pmi, out var token) && token is JObject o)
-    {
-        enabled = o.TryGetValue("Enabled", out var v) && v.Type == JTokenType.Boolean && v.Value<bool>();
-    }
+    if (config.Wallet != null) walletEnabled = true;
+    enabled = config.Enabled;
+
+    Console.WriteLine("Wallet Enabled is " + walletEnabled);
 }
 
 @if (SignInManager.IsSignedIn(User) && User.IsInRole(Roles.ServerAdmin) &&
@@ -38,7 +38,7 @@ NanoLikeConfiguration.NanoLikeConfigurationItems.Any())
         nameof(UINanoLikeStoreController).StartsWith(controller.ToString() ?? string.Empty,
         StringComparison.InvariantCultureIgnoreCase) &&
         ViewContext.RouteData.Values.TryGetValue("cryptoCode", out var cryptoCode) && cryptoCode is not null &&
-        cryptoCode.ToString() == item.CryptoCode;
+        cryptoCode.ToString() == item.CryptoCode && walletEnabled;
         <li class="nav-item">
             <a class="nav-link @(isActive ? "active" : "")" asp-route-cryptoCode="@item.CryptoCode" asp-route-storeId="@storeId"
                 asp-action="WalletTransaction" asp-controller="UINanoLikeStore">

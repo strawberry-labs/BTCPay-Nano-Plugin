@@ -149,13 +149,34 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         }
 
         [HttpGet("{cryptoCode}")]
-        public async Task<IActionResult> WalletTransaction(string cryptoCode)
+        public async Task<IActionResult> WalletTransaction(string storeId, string cryptoCode)
         {
             cryptoCode = cryptoCode.ToUpperInvariant();
             if (!_NanoLikeConfiguration.NanoLikeConfigurationItems.ContainsKey(cryptoCode))
             {
-                Console.WriteLine(_NanoLikeConfiguration.NanoLikeConfigurationItems);
                 return NotFound();
+            }
+
+            try
+            {
+                var nanoCfg = await getPaymentConfig(storeId, cryptoCode);
+
+                if (nanoCfg.Wallet == null)
+                {
+                    var walletSetupVm = new NanoWalletSetupViewModel
+                    {
+                        StoreId = storeId,
+                        CryptoCode = cryptoCode
+                    };
+
+                    return View("/Views/Nano/SetupNanoWallet.cshtml", walletSetupVm);
+                }
+                // use nanoCfg
+            }
+            catch (Exception ex)
+            {
+                // handle malformed/legacy data
+                Console.WriteLine(ex);
             }
 
             // var vm = GetNanoLikePaymentMethodViewModel(StoreData, cryptoCode,
@@ -244,11 +265,11 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             {
                 try
                 {
-                    var newAccount = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("create_account", new CreateAccountRequest()
-                    {
-                        Label = viewModel.NewAccountLabel
-                    });
-                    viewModel.AccountIndex = newAccount.AccountIndex;
+                    // var newAccount = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("create_account", new CreateAccountRequest()
+                    // {
+                    //     Label = viewModel.NewAccountLabel
+                    // });
+                    // viewModel.AccountIndex = newAccount.AccountIndex;
                 }
                 catch (Exception)
                 {
@@ -486,25 +507,31 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         }
 
         [HttpGet("{cryptoCode}/walletsettings")]
-        public IActionResult WalletSettings(string storeId, string cryptoCode)
+        public async Task<IActionResult> WalletSettings(string storeId, string cryptoCode)
         {
-
-            var code = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant();
-            var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(code);
-            var cfg = StoreData.GetPaymentMethodConfigs();
-
             bool enabled = false;
-            if (cfg.TryGetValue(pmi, out var token) && token is JObject obj)
+            string address = "";
+
+            try
             {
-                enabled = obj["Enabled"]?.Value<bool>() ?? false;
+                NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
+
+                enabled = config.Enabled;
+                address = config.PublicAddress;
             }
+            catch (Exception e)
+            {
+                enabled = false;
+            }
+
+            string code = "NANO";
 
             var vm = new NanoWalletSettingsViewModel
             {
                 StoreId = storeId,
                 // StoreName = "Demo Store",
-                CryptoCode = code,
-                UriScheme = code.ToLowerInvariant(), // e.g., "nano"
+                CryptoCode = "XNO",
+                UriScheme = "xno",
                 // WalletId = $"{storeId}-{code}",
 
                 Enabled = enabled,
@@ -515,8 +542,8 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 // DefaultIncludeNonWitnessUtxo = false,
                 // NBXSeedAvailable = false,
 
-                Label = $"{code} Demo Wallet",
-                PublicAddress = "xno_abcdshjfdshjfkdsfsd"
+                Label = $"{code} Wallet",
+                PublicAddress = address
                 // DerivationScheme = $"{code}_MOCK_DERIVATION",
                 // DerivationSchemeInput = null
             };
@@ -524,9 +551,9 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             // // Ensure list is non-null so the view’s for-loop and JSON serialization don’t NRE
             // vm.AccountKeys ??= new();
 
-            // Text used by the modal buttons in the view
-            ViewData["ReplaceDescription"] = $"This will disconnect the current {code} wallet from the store and start a new setup.";
-            ViewData["RemoveDescription"] = $"This will remove the {code} wallet from the store. You can add one again later.";
+            // // Text used by the modal buttons in the view
+            // ViewData["ReplaceDescription"] = $"This will disconnect the current {code} wallet from the store and start a new setup.";
+            // ViewData["RemoveDescription"] = $"This will remove the {code} wallet from the store. You can add one again later.";
 
             return View("/Views/Nano/NanoWalletSettings.cshtml", vm); // or just: return View(vm);
         }
@@ -535,22 +562,16 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateEnabled(string storeId, string cryptoCode, bool enabled)
         {
-            var store = await _StoreRepository.FindStore(storeId);
-            if (store is null) return NotFound();
+            NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
 
-            var code = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant();
-            var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(code);
-            var configs = store.GetPaymentMethodConfigs();
-            var obj = (configs.TryGetValue(pmi, out var token) && token is JObject o) ? o : new JObject();
-            obj["Enabled"] = enabled;
-            store.SetPaymentMethodConfig(pmi, obj);
+            config.Enabled = enabled;
 
-            await _StoreRepository.UpdateStore(store);
+            await setPaymentConfig(storeId, cryptoCode, config);
 
             return RedirectToAction(nameof(WalletSettings), new { storeId, cryptoCode });
         }
 
-        [HttpGet("/onchain/{cryptoCode}/delete")]
+        [HttpGet("onchain/{cryptoCode}/delete")]
         [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
         public ActionResult DeleteWallet(string storeId, string cryptoCode)
         {
@@ -566,36 +587,142 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             });
         }
 
-        [HttpPost("/onchain/{cryptoCode}/delete")]
+        [HttpPost("onchain/{cryptoCode}/delete")]
         [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
         public async Task<IActionResult> ConfirmDeleteWallet(string storeId, string cryptoCode)
         {
-            // Check wallet ID is present in settings
-            // If not present, break
+            NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
+            Console.WriteLine("HERE");
+            Console.WriteLine(storeId);
+            Console.WriteLine(config.Wallet);
+            Console.WriteLine(config.Enabled);
+            if (config.Wallet == null) return Redirect("/");
 
-            // store.SetPaymentMethodConfig(PaymentTypes.CHAIN.GetPaymentMethodId(network.CryptoCode), null);
+            await setPaymentConfig(storeId, cryptoCode, new NanoLikePaymentMethodConfiguration
+            {
+                Wallet = null,
+                Enabled = false
+            });
 
-            // await _storeRepo.UpdateStore(store);
-            // _eventAggregator.Publish(new WalletChangedEvent { WalletId = new WalletId(storeId, cryptoCode) });
+            WalletDestroyResponse response;
 
-            // WalletDestroyResponse response;
+            try
+            {
+                response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<WalletDestroyRequest, WalletDestroyResponse>("wallet_destroy", new WalletDestroyRequest
+                {
+                    Wallet = config.Wallet
+                });
 
-            // try
-            // {
-            //     response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<WalletDestroyRequest, WalletDestroyResponse>("wallet_destroy", new WalletDestroyRequest
-            //     {
-            //         Wallet = "51A154C12A8D1167D147FDC65BA071B03E0EDBA47BC75B79EC0BE1472B7A3265"
-            //     });
-            // }
-            // catch (Exception e)
-            // {
-            //     Console.WriteLine(e);
-            // }
+                TempData[WellKnownTempData.SuccessMessage] =
+                $"On-Chain payment for Nano has been removed.";
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
 
-            // TempData[WellKnownTempData.SuccessMessage] =
-            //     $"On-Chain payment for {cryptoCode} has been removed.";
+                TempData[WellKnownTempData.ErrorMessage] =
+                $"Failed to delete nano wallet. Please remove it manually from the node.";
+            }
 
+            return Redirect("/");
+        }
+
+        [HttpGet("onchain/{cryptoCode}/generateWallet")]
+        [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
+        public async Task<IActionResult> GenerateWallet(string storeId, string cryptoCode)
+        {
+            try
+            {
+                WalletCreateResponse response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<object, WalletCreateResponse>("wallet_create", null);
+
+                string wallet = response.Wallet;
+
+                CreateAccountResponse accountResponse = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("account_create", new CreateAccountRequest
+                {
+                    Wallet = wallet
+                });
+
+                string address = accountResponse.Account;
+
+                NanoLikePaymentMethodConfiguration newConfig = new NanoLikePaymentMethodConfiguration
+                {
+                    Enabled = true,
+                    Wallet = wallet,
+                    PublicAddress = address
+                };
+
+                await setPaymentConfig(storeId, cryptoCode, newConfig);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                TempData[WellKnownTempData.ErrorMessage] =
+                $"Generation of Nano wallet failed. Please try again later.";
+
+                return Redirect("/");
+            }
+
+            TempData[WellKnownTempData.SuccessMessage] = $"On-Chain payment for Nano has been created.";
             return RedirectToAction(nameof(WalletSettings), new { storeId, cryptoCode });
+        }
+
+        public async Task<NanoLikePaymentMethodConfiguration> getPaymentConfig(string storeId, string cryptoCode)
+        {
+            var code = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant();
+            var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(code);
+            var store = await _StoreRepository.FindStore(storeId);
+            var cfg = store.GetPaymentMethodConfigs();
+
+            if (cfg.TryGetValue(pmi, out var token) && token is JToken obj)
+            {
+                try
+                {
+                    var nanoCfg = obj.ToObject<NanoLikePaymentMethodConfiguration>();
+
+                    return nanoCfg;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+
+                    return new NanoLikePaymentMethodConfiguration
+                    {
+                        Wallet = null,
+                        Enabled = false
+                    };
+                }
+            }
+            else
+            {
+                return new NanoLikePaymentMethodConfiguration
+                {
+                    Wallet = null,
+                    Enabled = false
+                };
+            }
+        }
+
+        public async Task setPaymentConfig(string storeId, string cryptoCode, NanoLikePaymentMethodConfiguration newConfig)
+        {
+            var store = await _StoreRepository.FindStore(storeId);
+
+            if (store is null) throw new Exception("No Store Found");
+
+            var code = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant();
+            var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(code);
+
+            if (newConfig == null)
+            {
+                Console.WriteLine("HERE SETTING CONFIG TO NULL");
+                store.SetPaymentMethodConfig(pmi, null);
+                return;
+            }
+
+            JObject jsonConfig = JObject.FromObject(newConfig);
+
+            store.SetPaymentMethodConfig(pmi, jsonConfig);
+
+            await _StoreRepository.UpdateStore(store);
         }
 
         private string WalletRemoveWarning(bool isHotWallet)

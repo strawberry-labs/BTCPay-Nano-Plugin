@@ -41,8 +41,6 @@ public class NanoPlugin : BaseBTCPayServerPlugin
         var prov = pluginServices.BootstrapServices.GetRequiredService<NBXplorerNetworkProvider>();
         var chainName = prov.NetworkType;
 
-        Console.WriteLine("ABCD", chainName);
-
         var network = new NanoLikeSpecificBtcPayNetwork()
         {
             CryptoCode = "XNO",
