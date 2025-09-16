@@ -53,7 +53,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             // }
         }
 
-        public ImmutableDictionary<string, JsonRpcClient> CashCowWalletRpcClients { get; set; }
+        // public ImmutableDictionary<string, JsonRpcClient> CashCowWalletRpcClients { get; set; }
 
         public bool IsConfigured(string cryptoCode) => RpcClients.ContainsKey(cryptoCode);
         public bool IsAvailable(string cryptoCode)
@@ -64,8 +64,8 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private bool IsAvailable(NanoLikeSummary summary)
         {
-            return summary.Synced &&
-                   summary.WalletAvailable;
+            return summary.Synced;
+            // && summary.WalletAvailable;
         }
 
         public async Task<NanoLikeSummary> UpdateSummary(string cryptoCode)
@@ -79,12 +79,15 @@ namespace BTCPayServer.Plugins.Nano.Services
             try
             {
                 var daemonResult =
-                    await RpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, GetInfoResponse>("get_info",
+                    await RpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, TelemetryResponse>("telemetry",
                         JsonRpcClient.NoRequestModel.Instance);
-                summary.TargetHeight = daemonResult.TargetHeight.GetValueOrDefault(0);
-                summary.CurrentHeight = daemonResult.Height;
+
+                summary.TargetHeight = daemonResult.BlockCount;
+                summary.CurrentHeight = daemonResult.CementedCount;
                 summary.TargetHeight = summary.TargetHeight == 0 ? summary.CurrentHeight : summary.TargetHeight;
-                summary.Synced = !daemonResult.BusySyncing;
+                // summary.Synced = !daemonResult.BusySyncing;
+                // Assume synced. Always set up node with the ledger file. 
+                summary.Synced = true;
                 summary.UpdatedAt = DateTime.UtcNow;
                 summary.DaemonAvailable = true;
             }
@@ -93,26 +96,28 @@ namespace BTCPayServer.Plugins.Nano.Services
                 summary.DaemonAvailable = false;
             }
 
-            bool walletCreated = false;
-        retry:
-            try
-            {
-                var walletResult =
-                    await RpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, GetHeightResponse>(
-                        "get_height", JsonRpcClient.NoRequestModel.Instance);
-                summary.WalletHeight = walletResult.Height;
-                summary.WalletAvailable = true;
-            }
-            catch when (environment.CheatMode && !walletCreated)
-            {
-                await CreateTestWallet(RpcClient);
-                walletCreated = true;
-                goto retry;
-            }
-            catch
-            {
-                summary.WalletAvailable = false;
-            }
+            // bool walletCreated = false;
+            // retry:
+            //     try
+            //     {
+            //         // var walletResult =
+            //         //     await RpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, GetHeightResponse>(
+            //         //         "get_height", JsonRpcClient.NoRequestModel.Instance);
+            //         // summary.WalletHeight = walletResult.Height;
+
+
+            //         summary.WalletAvailable = true;
+            //     }
+            // catch when (environment.CheatMode && !walletCreated)
+            // {
+            //     await CreateTestWallet(RpcClient);
+            //     walletCreated = true;
+            //     goto retry;
+            // }
+            // catch
+            // {
+            //     summary.WalletAvailable = false;
+            // }
 
             // if (environment.CheatMode &&
             //     CashCowWalletRpcClients.TryGetValue(cryptoCode.ToUpperInvariant(), out var cashCow))
@@ -165,32 +170,32 @@ namespace BTCPayServer.Plugins.Nano.Services
         //     _logger.LogInformation("Mining succeed!");
         // }
 
-        private static async Task CreateTestWallet(JsonRpcClient RpcClient)
-        {
-            try
-            {
-                await RpcClient.SendCommandAsync<OpenWalletRequest, JsonRpcClient.NoRequestModel>(
-                    "open_wallet",
-                    new OpenWalletRequest()
-                    {
-                        Filename = "wallet",
-                        Password = "password"
-                    });
-                return;
-            }
-            catch
-            {
-                // ignored
-            }
+        // private static async Task CreateTestWallet(JsonRpcClient RpcClient)
+        // {
+        //     try
+        //     {
+        //         await RpcClient.SendCommandAsync<OpenWalletRequest, JsonRpcClient.NoRequestModel>(
+        //             "open_wallet",
+        //             new OpenWalletRequest()
+        //             {
+        //                 Filename = "wallet",
+        //                 Password = "password"
+        //             });
+        //         return;
+        //     }
+        //     catch
+        //     {
+        //         // ignored
+        //     }
 
-            await RpcClient.SendCommandAsync<CreateWalletRequest, JsonRpcClient.NoRequestModel>("create_wallet",
-                new()
-                {
-                    Filename = "wallet",
-                    Password = "password",
-                    Language = "English"
-                });
-        }
+        //     await RpcClient.SendCommandAsync<CreateWalletRequest, JsonRpcClient.NoRequestModel>("create_wallet",
+        //         new()
+        //         {
+        //             Filename = "wallet",
+        //             Password = "password",
+        //             Language = "English"
+        //         });
+        // }
 
 
         public class NanoDaemonStateChange
@@ -203,11 +208,11 @@ namespace BTCPayServer.Plugins.Nano.Services
         {
             public bool Synced { get; set; }
             public long CurrentHeight { get; set; }
-            public long WalletHeight { get; set; }
+            // public long WalletHeight { get; set; }
             public long TargetHeight { get; set; }
             public DateTime UpdatedAt { get; set; }
             public bool DaemonAvailable { get; set; }
-            public bool WalletAvailable { get; set; }
+            // public bool WalletAvailable { get; set; }
         }
     }
 }

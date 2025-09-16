@@ -68,6 +68,7 @@ public class NanoPlugin : BaseBTCPayServerPlugin
                 ConfigureNanoLikeConfiguration(provider));
 
         services.AddSingleton<NanoRPCProvider>();
+        services.AddHostedService<NanoLikeSummaryUpdaterHostedService>();
 
         services.AddSingleton<IUIExtension>(new UIExtension("StoreWalletsNavNanoExtension", "store-wallets-nav"));
 

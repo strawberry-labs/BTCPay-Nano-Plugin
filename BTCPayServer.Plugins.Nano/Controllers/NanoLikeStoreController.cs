@@ -86,7 +86,9 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         {
             try
             {
-                if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary) && summary.WalletAvailable)
+                if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary)
+                // && summary.WalletAvailable
+                )
                 {
 
                     return _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<GetAccountsRequest, GetAccountsResponse>("get_accounts", new GetAccountsRequest());
@@ -297,19 +299,19 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 // }
                 if (valid)
                 {
-                    if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary))
-                    {
-                        if (summary.WalletAvailable)
-                        {
-                            TempData.SetStatusMessageModel(new StatusMessageModel
-                            {
-                                Severity = StatusMessageModel.StatusSeverity.Error,
-                                Message = StringLocalizer["There is already an active wallet configured for {0}. Replacing it would break any existing invoices!", cryptoCode].Value
-                            });
-                            return RedirectToAction(nameof(GetStoreNanoLikePaymentMethod),
-                                new { cryptoCode });
-                        }
-                    }
+                    // if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary))
+                    // {
+                    //     if (summary.WalletAvailable)
+                    //     {
+                    //         TempData.SetStatusMessageModel(new StatusMessageModel
+                    //         {
+                    //             Severity = StatusMessageModel.StatusSeverity.Error,
+                    //             Message = StringLocalizer["There is already an active wallet configured for {0}. Replacing it would break any existing invoices!", cryptoCode].Value
+                    //         });
+                    //         return RedirectToAction(nameof(GetStoreNanoLikePaymentMethod),
+                    //             new { cryptoCode });
+                    //     }
+                    // }
 
                     // var fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet");
                     // using (var fileStream = new FileStream(fileAddress, FileMode.Create))
