@@ -2,6 +2,7 @@
 using BTCPayServer.Plugins.Nano;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -10,9 +11,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BTCPayServer.Plugins.Nano.Data.Migrations
 {
     [DbContext(typeof(MyPluginDbContext))]
-    partial class MyPluginDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250918115504_InvoiceAdhocAddress-addInvoiceId")]
+    partial class InvoiceAdhocAddressaddInvoiceId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -24,23 +27,23 @@ namespace BTCPayServer.Plugins.Nano.Data.Migrations
 
             modelBuilder.Entity("BTCPayServer.Plugins.Nano.Data.InvoiceAdhocAddress", b =>
                 {
-                    b.Property<string>("id")
+                    b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("text");
 
-                    b.Property<string>("account")
+                    b.Property<string>("Account")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PrivateAddress")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PublicAddress")
                         .HasColumnType("text");
 
                     b.Property<string>("invoiceId")
                         .HasColumnType("text");
 
-                    b.Property<string>("privateAddress")
-                        .HasColumnType("text");
-
-                    b.Property<string>("publicAddress")
-                        .HasColumnType("text");
-
-                    b.HasKey("id");
+                    b.HasKey("Id");
 
                     b.ToTable("InvoiceAdhocAddress", "BTCPayServer.Plugins.Nano");
                 });

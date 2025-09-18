@@ -11,8 +11,8 @@ using BTCPayServer.Configuration;
 using BTCPayServer.Hosting;
 using BTCPayServer.Payments;
 using BTCPayServer.Plugins.Nano.Services;
-using BTCPayServer.Plugins.Nano.Services;
 using BTCPayServer.Plugins.Nano.Configuration;
+using BTCPayServer.Plugins.Nano.Repositories;
 using BTCPayServer.Services;
 
 using Microsoft.Extensions.Configuration;
@@ -73,7 +73,20 @@ public class NanoPlugin : BaseBTCPayServerPlugin
         services.AddSingleton<IUIExtension>(new UIExtension("StoreWalletsNavNanoExtension", "store-wallets-nav"));
 
         services.AddHostedService<ApplicationPartsLogger>();
+
+        // var conn = configuration.GetConnectionString("BTCPayConnection")
+        // ?? configuration["ConnectionStrings:BTCPayConnection"]
+        // ?? throw new InvalidOperationException("BTCPayConnection missing");
+        // services.AddDbContext<NanoLikeDbContext>(options =>
+        // options.UseNpgsql(conn, o => o.MigrationsAssembly(typeof(NanoLikeDbContext).Assembly.FullName)));
+        // services.AddHostedService<NanoLikeDbMigrator>(); // applies migrations on startup
+        // services.AddScoped<NanoLikeRepository>();
+
+        services.AddScoped<InvoiceAdhocAddressRepository>();
+
         services.AddHostedService<PluginMigrationRunner>();
+        services.AddSingleton(sp =>
+        ActivatorUtilities.CreateInstance<NanoAdhocAddressService>(sp, network));
         services.AddSingleton<MyPluginService>();
         services.AddSingleton<MyPluginDbContextFactory>();
         services.AddDbContext<MyPluginDbContext>((provider, o) =>

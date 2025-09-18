@@ -21,10 +21,10 @@ public class UIPluginController : Controller
     }
 
     // GET
-    public async Task<IActionResult> Index()
-    {
-        return View(new PluginPageViewModel { Data = await _PluginService.Get() });
-    }
+    // public async Task<IActionResult> Index()
+    // {
+    //     return View(new PluginPageViewModel { Data = await _PluginService.Get() });
+    // }
 }
 
 public class PluginPageViewModel

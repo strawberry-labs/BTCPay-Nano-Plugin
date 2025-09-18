@@ -25,7 +25,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<MyPluginDb
 
 public class MyPluginDbContextFactory : BaseDbContextFactory<MyPluginDbContext>
 {
-    public MyPluginDbContextFactory(IOptions<DatabaseOptions> options) : base(options, "BTCPayServer.Plugins.Template")
+    public MyPluginDbContextFactory(IOptions<DatabaseOptions> options) : base(options, "BTCPayServer.Plugins.Nano")
     {
     }
 
