@@ -90,6 +90,9 @@ public class NanoPlugin : BaseBTCPayServerPlugin
 
         services.AddScoped<InvoiceAdhocAddressRepository>();
 
+        services.AddSingleton<NanoBlockchainListenerHostedService>();
+        services.AddHostedService(sp => sp.GetRequiredService<NanoBlockchainListenerHostedService>());
+
         services.AddHostedService<PluginMigrationRunner>();
         services.AddSingleton(sp =>
         ActivatorUtilities.CreateInstance<NanoAdhocAddressService>(sp, network));
@@ -134,13 +137,22 @@ public class NanoPlugin : BaseBTCPayServerPlugin
                 configuration.GetOrDefault<Uri>(
                     $"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_rpc_uri", null);
 
-            if (rpcUri == null)
+            var websocketUri =
+                configuration.GetOrDefault<Uri>(
+                    $"{nanoLikeSpecificBtcPayNetwork.CryptoCode}_websocket_uri", null);
+
+            if (rpcUri == null || websocketUri == null)
             {
                 var logger = serviceProvider.GetRequiredService<ILogger<NanoPlugin>>();
                 var cryptoCode = nanoLikeSpecificBtcPayNetwork.CryptoCode.ToUpperInvariant();
                 if (rpcUri is null)
                 {
-                    logger.LogWarning($"BTCPAY_{cryptoCode}_DAEMON_URI is not configured");
+                    logger.LogWarning($"BTCPAY_{cryptoCode}_RPC_URI is not configured");
+                }
+
+                if (websocketUri is null)
+                {
+                    logger.LogWarning($"BTCPAY_{cryptoCode}_WEBSOCKET_URI is not configured");
                 }
 
                 logger.LogWarning($"{cryptoCode} got disabled as it is not fully configured.");
@@ -150,6 +162,7 @@ public class NanoPlugin : BaseBTCPayServerPlugin
                 result.NanoLikeConfigurationItems.Add(nanoLikeSpecificBtcPayNetwork.CryptoCode, new NanoLikeConfigurationItem()
                 {
                     RpcUri = rpcUri,
+                    WebsocketUri = websocketUri
                 });
             }
         }
