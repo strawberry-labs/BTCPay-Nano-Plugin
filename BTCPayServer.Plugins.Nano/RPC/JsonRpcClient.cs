@@ -59,8 +59,10 @@ namespace BTCPayServer.Plugins.Nano.RPC
             var token = JToken.Parse(rawJson);
 
             var error = (token.Type == JTokenType.Object) ? token["error"]?.ToString() : null;
+
             if (!string.IsNullOrEmpty(error))
             {
+                Console.WriteLine("throwing json api exception");
                 throw new JsonRpcApiException(error);
             }
 

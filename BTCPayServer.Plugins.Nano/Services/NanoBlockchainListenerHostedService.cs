@@ -14,18 +14,25 @@ using BTCPayServer.Plugins.Nano.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using System.Numerics;
+using BTCPayServer.Events;
+using BTCPayServer.Plugins.Nano.RPC;
+
 namespace BTCPayServer.Plugins.Nano.Services
 {
     public class NanoBlockchainListenerHostedService : IHostedService
     {
         private readonly NanoRPCProvider _NanoRpcProvider;
         private readonly NanoLikeConfiguration _nanoLikeConfiguration;
+        private readonly NanoLikePaymentConfigService _nanoLikePaymentConfigService;
+        private readonly EventAggregator _eventAggregator;
         private readonly Uri _confirmationsWebSocketUri;
         // Address list + pollers
         private readonly object _addressesLock = new();
-        private readonly List<string> _addresses = new()
+        private readonly List<AdhocAddress> _addresses = new()
         {
-            "nano_11frmgxjp8kacwi6ucpu9g6go9o7k1oojwzep3aca76pca7nujkpz79r17mb"
+            // new AdhocAddress { Address = "nano_1brnf63t185usp1cmpbhysnmaid7igetsyhd4j7sxemqh1pb9sg8oemb7czs", StoreId="DqnRiFAzhya6EUo2rdBh52qM1RaK9XT6UHFKRQrz84fE" }
+            // new AdhocAddress { Address = "nano_11frmgxjp8kacwi6ucpu9g6go9o7k1oojwzep3aca76pca7nujkpz79r17mb", StoreId="DqnRiFAzhya6EUo2rdBh52qM1RaK9XT6UHFKRQrz84fE" }
         };
         private readonly Dictionary<(string CryptoCode, string Address), CancellationTokenSource> _pollers = new();
 
@@ -49,17 +56,21 @@ namespace BTCPayServer.Plugins.Nano.Services
         public NanoBlockchainListenerHostedService(
             NanoRPCProvider nanoRpcProvider,
             NanoLikeConfiguration nanoLikeConfiguration,
+            NanoLikePaymentConfigService nanoLikePaymentConfigService,
+            EventAggregator eventAggregator,
             Logs logs)
         {
             _NanoRpcProvider = nanoRpcProvider;
             _nanoLikeConfiguration = nanoLikeConfiguration;
+            _nanoLikePaymentConfigService = nanoLikePaymentConfigService;
+            _eventAggregator = eventAggregator;
             Logs = logs;
 
             _confirmationsWebSocketUri = new Uri(
                 Environment.GetEnvironmentVariable("BTCPAY_XNO_WEBSOCKET_URI") ?? "wss://rainstorm.city/websocket");
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
             _Cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -71,9 +82,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             if (SnapshotAddresses().Length > 0)
                 EnsureWebSocketRunningIfNeeded();
 
-            AddAddress("nano_1u37ahnhujqkxcjwp9hizkybtwu9xs7bz71qs6uq4myou86g7s36jzs69nx7");
-            RemoveAddress("nano_11frmgxjp8kacwi6ucpu9g6go9o7k1oojwzep3aca76pca7nujkpz79r17mb");
-            return Task.CompletedTask;
+            // return Task.CompletedTask;
         }
 
         public async Task StopAsync(CancellationToken cancellationToken)
@@ -105,18 +114,19 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         // Public API: add/remove/get addresses
 
-        public bool AddAddress(string address)
+        public bool AddAddress(AdhocAddress address)
         {
-            if (string.IsNullOrWhiteSpace(address))
+            Console.WriteLine("Adding Address");
+            if (string.IsNullOrWhiteSpace(address.Address))
                 return false;
 
-            address = address.Trim();
+            address.Address = address.Address.Trim();
             bool added = false;
             bool firstAfterAdd = false;
 
             lock (_addressesLock)
             {
-                if (!_addresses.Contains(address, StringComparer.Ordinal))
+                if (!_addresses.Any(a => string.Equals(a.Address, address.Address, StringComparison.Ordinal)))
                 {
                     _addresses.Add(address);
                     added = true;
@@ -128,7 +138,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             if (!added)
                 return false;
 
-            Logs.PayServer.LogInformation("Added Nano address to subscription list: {Address}", address);
+            Logs.PayServer.LogInformation("Added Nano address to subscription list: {Address}", address.Address);
 
             // Start polling failsafe for this address
             StartPollingForAddress(address);
@@ -136,37 +146,49 @@ namespace BTCPayServer.Plugins.Nano.Services
             if (firstAfterAdd)
             {
                 // Start/restart the WS connection (initial subscribe will send the full snapshot)
+                Console.WriteLine("STarting WS Connection");
                 EnsureWebSocketRunningIfNeeded();
             }
             else
             {
                 // If already connected, send an update
-                _ = TrySendUpdateAsync(accountsAdd: new[] { address }, accountsDel: null);
+                Console.WriteLine("Updating WS Connection");
+                _ = TrySendUpdateAsync(accountsAdd: new[] { address.Address }, accountsDel: null);
             }
 
             return true;
         }
 
-        public bool RemoveAddress(string address)
+        public bool RemoveAddress(AdhocAddress address)
         {
-            if (string.IsNullOrWhiteSpace(address))
+            Console.WriteLine("In RemoveAddress");
+            if (string.IsNullOrWhiteSpace(address.Address))
+            {
+                Console.WriteLine("In Here 1");
                 return false;
+            }
 
-            address = address.Trim();
+
+            address.Address = address.Address.Trim();
             bool removed = false;
             bool nowEmpty = false;
 
             lock (_addressesLock)
             {
                 removed = _addresses.Remove(address);
+                var addresses = SnapshotAddresses();
+
                 if (removed && _addresses.Count == 0)
                     nowEmpty = true;
             }
 
             if (!removed)
+            {
+                Console.WriteLine("In Here 1");
                 return false;
+            }
 
-            Logs.PayServer.LogInformation("Removed Nano address from subscription list: {Address}", address);
+            Logs.PayServer.LogInformation("Removed Nano address from subscription list: {Address}", address.Address);
 
             // Stop polling failsafe for this address
             StopPollingForAddress(address);
@@ -179,13 +201,13 @@ namespace BTCPayServer.Plugins.Nano.Services
             else
             {
                 // If still connected, send an update
-                _ = TrySendUpdateAsync(accountsAdd: null, accountsDel: new[] { address });
+                _ = TrySendUpdateAsync(accountsAdd: null, accountsDel: new[] { address.Address });
             }
 
             return true;
         }
 
-        public IReadOnlyCollection<string> GetAddresses()
+        public IReadOnlyCollection<AdhocAddress> GetAddresses()
         {
             lock (_addressesLock)
             {
@@ -199,7 +221,11 @@ namespace BTCPayServer.Plugins.Nano.Services
         {
             // Only start if there are addresses
             if (SnapshotAddresses().Length == 0)
+            {
+                Console.WriteLine("Num addresses is 0");
                 return;
+            }
+
 
             lock (_wsStateLock)
             {
@@ -332,6 +358,8 @@ namespace BTCPayServer.Plugins.Nano.Services
                                 msg.TryGetProperty("hash", out var hash))
                             {
                                 Logs.PayServer.LogInformation("WS confirmation: account={Account} hash={Hash}", account.GetString(), hash.GetString());
+
+                                SendNanoEvent(root);
                             }
                             else
                             {
@@ -374,7 +402,233 @@ namespace BTCPayServer.Plugins.Nano.Services
             Logs.PayServer.LogInformation("Confirmations WebSocket listener stopped.");
         }
 
-        private async Task SendSubscribeAsync(ClientWebSocket ws, string[] accounts, CancellationToken ct)
+        private async Task SendNanoEvent(JsonElement data)
+        {
+            try
+            {
+                if (!data.TryGetProperty("message", out var msg))
+                    return;
+                // Common fields
+                var account = msg.TryGetProperty("account", out var a) ? a.GetString() : null;
+                var hash = msg.TryGetProperty("hash", out var h) ? h.GetString() : null;
+                // var subtype = msg.TryGetProperty("subtype", out var st) ? st.GetString() : null;
+                var amountRawStr = msg.TryGetProperty("amount", out var amt) ? amt.GetString() : "0";
+
+                // Extract block object (can be an object or a JSON string)
+                JsonElement? blockObj = TryGetBlockObject(msg);
+
+                // From block: destination (for sends) and source send hash (for receives)
+                string linkAsAccount = null;
+                string linkHash = null;
+                string subtype = null;
+
+                if (blockObj is JsonElement block)
+                {
+                    if (block.TryGetProperty("link_as_account", out var laa))
+                        linkAsAccount = laa.GetString();
+                    if (block.TryGetProperty("link", out var l))
+                        linkHash = l.GetString();
+                    if (block.TryGetProperty("subtype", out var s))
+                        subtype = s.GetString();
+                }
+
+                // Snapshot of subscribed addresses
+                var subscribed = new HashSet<AdhocAddress>(SnapshotAddresses(), AdhocAddressByAddressComparer.Instance);
+                var accountIsOurs = !string.IsNullOrEmpty(account) && subscribed.Any(a => string.Equals(a.Address, account, StringComparison.Ordinal));
+                var destinationIsOurs = !string.IsNullOrEmpty(linkAsAccount) && subscribed.Any(a => string.Equals(a.Address, linkAsAccount, StringComparison.Ordinal));
+
+                if (accountIsOurs || destinationIsOurs)
+                {
+                    var accounts = SnapshotAddresses();
+
+                }
+
+                // Convert amount raw -> text nano for logging
+                var amountNanoText = RawToNanoString(amountRawStr);
+
+                // // Parse raw into long for event payload (best-effort; raw can exceed long)
+                // long amountRaw = 0;
+                // try { amountRaw = long.Parse(amountRawStr); } catch { /* ignore overflow; keep 0 */ }
+
+                // Resolve CryptoCode (prefer any address we recognize in our pollers)
+                var cryptoCode = ResolveCryptoCode(account, linkAsAccount) ?? _nanoLikeConfiguration
+                    ?.NanoLikeConfigurationItems?.Keys?.FirstOrDefault() ?? "XNO";
+
+                // Decide event kind and publish
+                // - send: either external -> adhoc (SendToAdhocConfirmed) or adhoc -> store (SendToStoreWalletConfirmed)
+                // - receive/open: receive on adhoc or (if subscribed) on store wallet
+                if (string.Equals(subtype, "send", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (destinationIsOurs && !accountIsOurs)
+                    {
+
+                        var addresses = GetAddresses();
+                        AdhocAddress adhocAddress = addresses.Where(a => a.Address == linkAsAccount).ToArray()[0];
+                        string storeId = adhocAddress.StoreId;
+
+                        // External payer sent to our adhoc
+                        var ev = new NanoEvent
+                        {
+                            CryptoCode = cryptoCode,
+                            Kind = NanoEventKind.SendToAdhocConfirmed,
+                            Account = linkAsAccount,       // our adhoc account
+                            BlockHash = hash,
+                            AmountRaw = amountRawStr,
+                            FromAccount = account,
+                            ToAccount = linkAsAccount,
+                            StoreId = storeId
+                        };
+
+                        Logs.PayServer.LogInformation("Nano WS: SendToAdhocConfirmed from {From} to {To} amount(raw)={Raw} (~{Nano} NANO) hash={Hash}",
+                            account, linkAsAccount, amountRawStr, amountNanoText, hash);
+                        _eventAggregator?.Publish(ev);
+                    }
+                    else if (accountIsOurs && !string.IsNullOrEmpty(linkAsAccount))
+                    {
+                        // Our adhoc sent to store wallet (sweep)
+                        var addresses = GetAddresses();
+                        AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
+                        string storeId = adhocAddress.StoreId;
+
+                        var ev = new NanoEvent
+                        {
+                            CryptoCode = cryptoCode,
+                            Kind = NanoEventKind.SendToStoreWalletConfirmed,
+                            Account = account,            // our adhoc account
+                            BlockHash = hash,
+                            AmountRaw = amountRawStr,
+                            FromAccount = account,
+                            ToAccount = linkAsAccount,
+                            StoreId = storeId
+                        };
+
+                        Logs.PayServer.LogInformation("Nano WS: SendToStoreWalletConfirmed from {From} to {To} amount(raw)={Raw} (~{Nano} NANO) hash={Hash}",
+                            account, linkAsAccount, amountRawStr, amountNanoText, hash);
+                        _eventAggregator?.Publish(ev);
+                    }
+                    // else: not relevant to our tracked addresses
+                }
+                else if (string.Equals(subtype, "receive", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(subtype, "open", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (accountIsOurs)
+                    {
+                        var addresses = GetAddresses();
+                        AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
+                        string storeId = adhocAddress.StoreId;
+
+                        var ev = new NanoEvent
+                        {
+                            CryptoCode = cryptoCode,
+                            Kind = NanoEventKind.ReceiveOnAdhocConfirmed,
+                            Account = account,            // the receiving account
+                            BlockHash = hash,
+                            AmountRaw = amountRawStr,
+                            SourceSendHash = linkHash,
+                            StoreId = storeId
+                        };
+
+                        Logs.PayServer.LogInformation("Nano WS: ReceiveOnAdhocConfirmed on {Account} amount(raw)={Raw} (~{Nano} NANO) hash={Hash} sourceSend={Source}",
+                            account, amountRawStr, amountNanoText, hash, linkHash);
+                        _eventAggregator?.Publish(ev);
+                    }
+                    // Currently no need to track confirmations on store wallet.
+                    // Need to add additional logic.
+                    // TODO: Configure receive on store wallet event. 
+
+                    // else if (destinationIsOurs)
+                    // {
+                    //     var ev = new NanoEvent
+                    //     {
+                    //         CryptoCode = cryptoCode,
+                    //         Kind = NanoEventKind.ReceiveOnStoreWalletConfirmed,
+                    //         Account = account,            // the receiving account
+                    //         BlockHash = hash,
+                    //         AmountRaw = amountRawStr,
+                    //         SourceSendHash = linkHash
+                    //     };
+                    //     Logs.PayServer.LogInformation("Nano WS: ReceiveOnStoreWalletConfirmed on {Account} amount(raw)={Raw} (~{Nano} NANO) hash={Hash} sourceSend={Source}",
+                    //         account, amountRawStr, amountNanoText, hash, linkHash);
+                    //     _eventAggregator?.Publish(ev);
+                    // }
+                }
+                else
+                {
+                    // change/epoch/etc. not used
+                    Logs.PayServer.LogDebug("Nano WS: Ignored subtype {Subtype} for account={Account} hash={Hash}", subtype, account, hash);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logs.PayServer.LogDebug(ex, "Failed processing Nano confirmation message");
+            }
+
+            await Task.CompletedTask;
+        }
+
+        private JsonElement? TryGetBlockObject(JsonElement msg)
+        {
+            if (!msg.TryGetProperty("block", out var blockEl))
+                return null;
+            if (blockEl.ValueKind == JsonValueKind.Object)
+                return blockEl;
+
+            if (blockEl.ValueKind == JsonValueKind.String)
+            {
+                var s = blockEl.GetString();
+                if (!string.IsNullOrWhiteSpace(s) && s.TrimStart().StartsWith("{"))
+                {
+                    try
+                    {
+                        using var bd = JsonDocument.Parse(s);
+                        return bd.RootElement.Clone();
+                    }
+                    catch { /* ignore */ }
+                }
+            }
+
+            return null;
+        }
+
+        private string ResolveCryptoCode(params string[] addresses)
+        {
+            if (addresses == null || addresses.Length == 0)
+                return null;
+            lock (_addressesLock)
+            {
+                foreach (var addr in addresses)
+                {
+                    if (string.IsNullOrEmpty(addr))
+                        continue;
+
+                    foreach (var k in _pollers.Keys)
+                    {
+                        if (string.Equals(k.Address, addr, StringComparison.Ordinal))
+                            return k.CryptoCode;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static string RawToNanoString(string rawStr)
+        {
+            if (string.IsNullOrWhiteSpace(rawStr))
+                return "0";
+            if (!BigInteger.TryParse(rawStr, out var raw))
+                return "0";
+
+            var unit = BigInteger.Pow(10, 30); // 1 NANO = 10^30 raw
+            var integer = BigInteger.DivRem(raw, unit, out var remainder);
+
+            if (remainder.IsZero)
+                return integer.ToString();
+
+            var frac = remainder.ToString().PadLeft(30, '0').TrimEnd('0');
+            return $"{integer}.{frac}";
+        }
+
+        private async Task SendSubscribeAsync(ClientWebSocket ws, AdhocAddress[] accounts, CancellationToken ct)
         {
             var payload = new
             {
@@ -382,7 +636,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                 topic = "confirmation",
                 options = new
                 {
-                    accounts = accounts
+                    accounts = accounts.Select(account => account.Address).ToArray()
                 }
             };
             var json = JsonSerializer.Serialize(payload);
@@ -442,7 +696,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             }
         }
 
-        private string[] SnapshotAddresses()
+        private AdhocAddress[] SnapshotAddresses()
         {
             lock (_addressesLock)
             {
@@ -452,13 +706,13 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         // Manual polling failsafe
 
-        private void StartPollingForAddress(string address)
+        private void StartPollingForAddress(AdhocAddress address)
         {
             lock (_addressesLock)
             {
                 foreach (var kv in _nanoLikeConfiguration.NanoLikeConfigurationItems)
                 {
-                    var key = (kv.Key, address);
+                    var key = (kv.Key, address.Address);
                     if (_pollers.ContainsKey(key))
                         continue;
 
@@ -471,11 +725,11 @@ namespace BTCPayServer.Plugins.Nano.Services
             }
         }
 
-        private void StopPollingForAddress(string address)
+        private void StopPollingForAddress(AdhocAddress address)
         {
             lock (_addressesLock)
             {
-                var keysToStop = _pollers.Keys.Where(k => k.Address == address).ToList();
+                var keysToStop = _pollers.Keys.Where(k => k.Address == address.Address).ToList();
                 foreach (var key in keysToStop)
                 {
                     if (_pollers.TryGetValue(key, out var cts))
@@ -488,10 +742,10 @@ namespace BTCPayServer.Plugins.Nano.Services
             }
         }
 
-        private async Task PollConfirmationsLoopAsync(CancellationToken ct, string cryptoCode, string address)
+        private async Task PollConfirmationsLoopAsync(CancellationToken ct, string cryptoCode, AdhocAddress address)
         {
             var delay = TimeSpan.FromSeconds(5);
-            Logs.PayServer.LogInformation("Starting confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address);
+            Logs.PayServer.LogInformation("Starting confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address.Address);
 
             while (!ct.IsCancellationRequested)
             {
@@ -499,7 +753,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                 {
                     // TODO: Replace with a real check per address
                     // await _NanoRpcProvider.UpdateSummary(cryptoCode).ConfigureAwait(false);
-                    Console.WriteLine("SIMULATED POLLING FOR ADDRESS " + address);
+                    Console.WriteLine("SIMULATED POLLING FOR ADDRESS " + address.Address);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -507,7 +761,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                 }
                 catch (Exception ex)
                 {
-                    Logs.PayServer.LogError(ex, "Error polling confirmations for {Address}", address);
+                    Logs.PayServer.LogError(ex, "Error polling confirmations for {Address}", address.Address);
                 }
 
                 try
@@ -520,7 +774,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                 }
             }
 
-            Logs.PayServer.LogInformation("Stopped confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address);
+            Logs.PayServer.LogInformation("Stopped confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address.Address);
         }
 
         // Payload helper types for JSON update
@@ -535,6 +789,16 @@ namespace BTCPayServer.Plugins.Nano.Services
         {
             public string[] accounts_add { get; set; }
             public string[] accounts_del { get; set; }
+        }
+
+        public sealed class AdhocAddressByAddressComparer : IEqualityComparer<AdhocAddress>
+        {
+            public static readonly AdhocAddressByAddressComparer Instance = new();
+            public bool Equals(AdhocAddress x, AdhocAddress y)
+                => string.Equals(x?.Address, y?.Address, StringComparison.Ordinal);
+
+            public int GetHashCode(AdhocAddress obj)
+                => StringComparer.Ordinal.GetHashCode(obj?.Address ?? string.Empty);
         }
     }
 }

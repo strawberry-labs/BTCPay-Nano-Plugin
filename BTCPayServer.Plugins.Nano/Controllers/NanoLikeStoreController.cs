@@ -515,14 +515,19 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         public async Task<IActionResult> WalletSettings(string storeId, string cryptoCode)
         {
             bool enabled = false;
-            string address = "";
+            string account = "";
 
             try
             {
                 NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
 
                 enabled = config.Enabled;
-                address = config.PublicAddress;
+                account = config.Account;
+
+                Console.WriteLine("Wallet details - ");
+                Console.WriteLine(config.Account);
+                Console.WriteLine(config.Wallet);
+                // Console.WriteLine(config.Account);
             }
             catch (Exception e)
             {
@@ -548,7 +553,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 // NBXSeedAvailable = false,
 
                 Label = $"{code} Wallet",
-                PublicAddress = address
+                Account = account
                 // DerivationScheme = $"{code}_MOCK_DERIVATION",
                 // DerivationSchemeInput = null
             };
@@ -647,13 +652,19 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                     Wallet = wallet
                 });
 
-                string address = accountResponse.Account;
+                string account = accountResponse.Account;
+
+                AccountKeyResponse keyResponse = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountKeyRequest, AccountKeyResponse>("account_key", new AccountKeyRequest
+                {
+                    Account = account
+                });
 
                 NanoLikePaymentMethodConfiguration newConfig = new NanoLikePaymentMethodConfiguration
                 {
                     Enabled = true,
                     Wallet = wallet,
-                    PublicAddress = address
+                    Account = account,
+                    PublicAddress = keyResponse.Key
                 };
 
                 await setPaymentConfig(storeId, cryptoCode, newConfig);

@@ -5,6 +5,7 @@ namespace BTCPayServer.Plugins.Nano.Data;
 
 public class InvoiceAdhocAddress
 {
+    // TODO: Add created_date_time
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public string id { get; set; }
 

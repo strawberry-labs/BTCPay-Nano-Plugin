@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using BTCPayServer.Data;
 using BTCPayServer.Payments;
 using BTCPayServer.Plugins.Nano.RPC.Models;
+using BTCPayServer.Plugins.Nano.RPC;
 using BTCPayServer.Plugins.Nano.Services;
 using BTCPayServer.Plugins.Nano.Data;
 
@@ -19,16 +20,18 @@ namespace BTCPayServer.Plugins.Nano.Payments
         public JsonSerializer Serializer { get; }
         private readonly NanoRPCProvider _nanoRpcProvider;
         private readonly NanoAdhocAddressService _nanoAdhocAddressService;
+        private readonly NanoBlockchainListenerHostedService _nanoBlockchainListenerHostedService;
 
         public PaymentMethodId PaymentMethodId { get; }
 
-        public NanoLikePaymentMethodHandler(NanoLikeSpecificBtcPayNetwork network, NanoRPCProvider nanoRpcProvider, NanoAdhocAddressService nanoAdhocAddressService)
+        public NanoLikePaymentMethodHandler(NanoLikeSpecificBtcPayNetwork network, NanoRPCProvider nanoRpcProvider, NanoAdhocAddressService nanoAdhocAddressService, NanoBlockchainListenerHostedService nanoBlockchainListenerHostedService)
         {
             PaymentMethodId = PaymentTypes.CHAIN.GetPaymentMethodId(network.CryptoCode);
             _network = network;
             Serializer = BlobSerializer.CreateSerializer().Serializer;
             _nanoRpcProvider = nanoRpcProvider;
             _nanoAdhocAddressService = nanoAdhocAddressService;
+            _nanoBlockchainListenerHostedService = nanoBlockchainListenerHostedService;
         }
         bool IsReady() => _nanoRpcProvider.IsConfigured(_network.CryptoCode) && _nanoRpcProvider.IsAvailable(_network.CryptoCode);
 
@@ -47,7 +50,18 @@ namespace BTCPayServer.Plugins.Nano.Payments
                     context.State = new Prepare()
                     {
                         // GetFeeRate = daemonClient.SendCommandAsync<GetFeeEstimateRequest, GetFeeEstimateResponse>("get_fee_estimate", new GetFeeEstimateRequest()),
-                        ReserveAddress = s => _nanoAdhocAddressService.PrepareAdhocAddress(invoice.Id),
+                        ReserveAddress = async s =>
+                        {
+                            InvoiceAdhocAddress adhocAddress = await _nanoAdhocAddressService.PrepareAdhocAddress(invoice.Id);
+                            _nanoBlockchainListenerHostedService.AddAddress(new AdhocAddress
+                            {
+                                Address = adhocAddress.account,
+                                StoreId = invoice.StoreId
+                            });
+                            Console.WriteLine("Prepared Address and Started Listening");
+                            Console.WriteLine("Adhoc Address - " + adhocAddress.account + " store id - " + invoice.StoreId);
+                            return adhocAddress;
+                        },
                         // AccountIndex = supportedPaymentMethod.AccountIndex
                     };
                 }

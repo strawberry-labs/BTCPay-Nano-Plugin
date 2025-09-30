@@ -45,7 +45,7 @@ namespace BTCPayServer.Plugins.Nano.Payments
                     .FirstOrDefault();
             if (details is not null)
             {
-                context.Model.ReceivedConfirmations = details.ConfirmationCount;
+                // context.Model.ReceivedConfirmations = details.Confirmation;
                 // TODO: Come back and check once u implement the Nano Listener
                 // context.Model.RequiredConfirmations = (int)NanoListener.ConfirmationsRequired(details, context.InvoiceEntity.SpeedPolicy);
             }

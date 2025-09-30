@@ -19,6 +19,9 @@ public class InvoiceAdhocAddressRepository
     public Task<InvoiceAdhocAddress> GetAsyncByInvoice(string invoiceId, CancellationToken ct = default)
     => _db.InvoiceAdhocAddress.AsNoTracking().FirstOrDefaultAsync(x => x.invoiceId == invoiceId, ct);
 
+    public Task<InvoiceAdhocAddress> GetAsyncByAccount(string account, CancellationToken ct = default)
+    => _db.InvoiceAdhocAddress.AsNoTracking().FirstOrDefaultAsync(x => x.account == account, ct);
+
     public async Task<InvoiceAdhocAddress> AddAsync(string publicAddress, string privateAddress, string account, string invoiceId, CancellationToken ct = default)
     {
         var item = new InvoiceAdhocAddress { publicAddress = publicAddress, privateAddress = privateAddress, account = account, invoiceId = invoiceId };

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -27,7 +28,7 @@ public class NanoAdhocAddressService
 
     async public Task<InvoiceAdhocAddress> PrepareAdhocAddress(string invoiceId)
     {
-        Console.WriteLine("Preparing Adhoc Address");
+        Console.WriteLine("Preparing Adhoc Address In The Adhoc Address Service");
         // Get the adhoc address
         KeyCreateResponse newAccount = await _nanoRpcProvider.RpcClients[_network.CryptoCode].SendCommandAsync<JsonRpcClient.NoRequestModel, KeyCreateResponse>("key_create", JsonRpcClient.NoRequestModel.Instance);
         // KeyCreateResponse newAccount = await _nanoRpcProvider.RpcClients["XNO"].SendCommandAsync<JsonRpcClient.NoRequestModel, KeyCreateResponse>("key_create", JsonRpcClient.NoRequestModel.Instance);
@@ -39,10 +40,45 @@ public class NanoAdhocAddressService
         var encryptedPrivKey = EncryptHex(privKey);
 
         // Save it in db with invoiceId and storeId
-        InvoiceAdhocAddress adhocAddress = await _invoiceAdhocAddressRepository.AddAsync(pubKey, privKey, account, invoiceId);
+        InvoiceAdhocAddress adhocAddress = await _invoiceAdhocAddressRepository.AddAsync(pubKey, encryptedPrivKey, account, invoiceId);
 
         // return an object that has all relevant data. 
         return adhocAddress;
+    }
+
+    async public Task<string> GetPrivateAddress(string account, CancellationToken ct)
+    {
+        InvoiceAdhocAddress adhocAddressRecord = await _invoiceAdhocAddressRepository.GetAsyncByAccount(account, ct);
+
+        Console.WriteLine("GETTING PRIVATE ADDRESS for account " + account);
+
+        Console.WriteLine(adhocAddressRecord.privateAddress);
+
+        string encPrivKey = adhocAddressRecord.privateAddress;
+
+        Console.WriteLine(encPrivKey);
+
+        // TODO: Uncomment this once all testing of all payment flow is done.
+        string decPrivKey = DecryptToHex(encPrivKey);
+        // string decPrivKey = encPrivKey;
+
+        Console.WriteLine(decPrivKey);
+
+        return decPrivKey;
+    }
+
+    async public Task<string> GetInvoiceIdFromAccount(string account, CancellationToken ct)
+    {
+        InvoiceAdhocAddress adhocAddressRecord = await _invoiceAdhocAddressRepository.GetAsyncByAccount(account, ct);
+
+        return adhocAddressRecord.invoiceId;
+    }
+
+    async public Task<string> GetAccountFromInvoiceId(string invoiceId, CancellationToken ct)
+    {
+        InvoiceAdhocAddress adhocAddressRecord = await _invoiceAdhocAddressRepository.GetAsyncByInvoice(invoiceId, ct);
+
+        return adhocAddressRecord.account;
     }
 
     public string EncryptHex(string hex)

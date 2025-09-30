@@ -8,6 +8,8 @@ namespace BTCPayServer.Plugins.Nano.Configuration
         public bool Enabled { get; set; } = false;
         public string Wallet { get; set; }
 
+        public string Account { get; set; } = null;
+
         public string PublicAddress { get; set; } = null;
     }
 
