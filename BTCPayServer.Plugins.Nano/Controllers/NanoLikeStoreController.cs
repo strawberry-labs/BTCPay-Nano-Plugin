@@ -173,6 +173,8 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 return NotFound();
             }
 
+            var currentBalance = "0";
+
             try
             {
                 var nanoCfg = await getPaymentConfig(storeId, cryptoCode);
@@ -188,6 +190,14 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                     return View("/Views/Nano/SetupNanoWallet.cshtml", walletSetupVm);
                 }
                 // use nanoCfg
+
+                // TODO: Change to account after generating new wallet.
+                var account = nanoCfg.PublicAddress;
+
+                var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
+                    "account_info", new AccountInfoRequest { Account = account });
+
+                currentBalance = RawToNanoString(info.Balance);
             }
             catch (Exception ex)
             {
@@ -206,7 +216,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 CryptoCode = "XNO",
                 Page = 1,
                 PageSize = 50,
-                CurrentBalanceNano = 13.234m
+                CurrentBalanceNano = currentBalance
             };
 
             vm.Labels.Add(("Deposit", "#E3F2FD", "#0D47A1"));

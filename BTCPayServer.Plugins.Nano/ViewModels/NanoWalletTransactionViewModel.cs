@@ -55,6 +55,6 @@ namespace BTCPayServer.Plugins.Nano.ViewModels
         public string WalletId { get; set; }
 
         // Optional: current wallet balance for header
-        public decimal CurrentBalanceNano { get; set; }
+        public string CurrentBalanceNano { get; set; }
     }
 }
