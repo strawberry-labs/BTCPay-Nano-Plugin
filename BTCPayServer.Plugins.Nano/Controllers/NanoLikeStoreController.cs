@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -8,6 +9,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System.Text.Encodings.Web;
+using System.Numerics;
 
 using BTCPayServer.Abstractions.Constants;
 using BTCPayServer.Abstractions.Extensions;
@@ -19,6 +21,7 @@ using BTCPayServer.Plugins.Nano.Configuration;
 using BTCPayServer.Plugins.Nano.Payments;
 using BTCPayServer.Plugins.Nano.RPC.Models;
 using BTCPayServer.Plugins.Nano.Services;
+using BTCPayServer.Services.Rates;
 using BTCPayServer.Plugins.Nano.ViewModels;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Stores;
@@ -42,17 +45,25 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         private readonly StoreRepository _StoreRepository;
         private readonly NanoRPCProvider _NanoRpcProvider;
         private readonly PaymentMethodHandlerDictionary _handlers;
+        // private readonly NanoRateService _nanoRateService;
+        private readonly DefaultRulesCollection _defaultRules;
+        private readonly RateFetcher _rateFetcher;
         private IStringLocalizer StringLocalizer { get; }
         private readonly HtmlEncoder _html;
 
         public UINanoLikeStoreController(NanoLikeConfiguration nanoLikeConfiguration,
             StoreRepository storeRepository, NanoRPCProvider nanoRpcProvider,
+              //  NanoRateService nanoRateService,
+              DefaultRulesCollection defaultRules, RateFetcher rateFetcher,
             PaymentMethodHandlerDictionary handlers,
             IStringLocalizer stringLocalizer, HtmlEncoder html)
         {
             _NanoLikeConfiguration = nanoLikeConfiguration;
             _StoreRepository = storeRepository;
             _NanoRpcProvider = nanoRpcProvider;
+            // _nanoRateService = nanoRateService;
+            _defaultRules = defaultRules;
+            _rateFetcher = rateFetcher;
             _handlers = handlers;
             StringLocalizer = stringLocalizer;
             _html = html;
@@ -431,22 +442,46 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             string? defaultDestination = null, string? defaultAmount = null, string[]? bip21 = null,
             [FromQuery] string? returnUrl = null)
         {
+            var store = await _StoreRepository.FindStore(storeId);
+
+            var rule = store.GetStoreBlob().GetRateRules(_defaultRules)?.GetRuleFor(new Rating.CurrencyPair(cryptoCode, "USD"));
+
+            var bid = rule is null ? null : (await _rateFetcher.FetchRate(rule, new StoreIdRateContext(storeId), HttpContext.RequestAborted)).BidAsk?.Bid;
+
+            decimal rate = 0;
+
+            if (bid is decimal b)
+            {
+                rate = b;
+            }
+
+            NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
+            // TODO: Change to account after generating new wallet.
+            var account = config.PublicAddress;
+
+            var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
+                "account_info", new AccountInfoRequest { Account = account });
+
+            var balance = RawToNanoString(info.Balance);
+
+            // Console.WriteLine("RATE - " + rate);
             var vm = new NanoWalletSendModel
             {
                 CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
-                CurrentBalance = 1234,
+                // TODO: Get from wallet
+                CurrentBalance = balance,
                 CryptoDivisibility = 6,
                 FiatDivisibility = 2,
                 Fiat = "USD",
-                Rate = 7.25m, // mock FX rate
+                Rate = rate,
                 Outputs = new List<NanoWalletSendModel.TransactionOutput>
             {
                 new NanoWalletSendModel.TransactionOutput
                 {
-                    DestinationAddress = "nano_3mockaddress1exampleexampleexampleexampleexample1",
-                    Amount = 1.234m,
-                    PayoutId = "mock-payout-001",
-                    Labels = new[] { "demo", "test" }
+                    DestinationAddress = defaultDestination,
+                    Amount = defaultAmount,
+                    // PayoutId = "mock-payout-001",
+                    // Labels = new[] { "demo", "test" }
                 }
             },
                 BackUrl = Url.Action(nameof(WalletTransaction), new
@@ -459,6 +494,74 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
 
             return View("/Views/Nano/NanoWalletSend.cshtml", vm);
+        }
+
+        [HttpPost("{cryptoCode}/walletsend")]
+        public async Task<IActionResult> WalletSend(
+            // [ModelBinder(typeof(WalletIdModelBinder))] WalletId walletId,
+            string cryptoCode, string storeId,
+            NanoWalletSendModel model)
+        {
+            NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
+
+            // TODO: Change this to account once u transfer funds from current wallet and delete it. 
+            // string source = config.Account;
+            string source = config.PublicAddress;
+            string destination = model.Outputs[0].DestinationAddress;
+            string amount = model.Outputs[0].Amount;
+            Guid id = Guid.NewGuid();
+            string wallet = config.Wallet;
+
+            decimal decimalAmount = Convert.ToDecimal(amount);
+            string rawAmount = XnoToRawString(decimalAmount);
+
+            var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<WalletSendRequest, WalletSendResponse>("send", new WalletSendRequest
+            {
+                Wallet = wallet,
+                Source = source,
+                Destination = destination,
+                Amount = rawAmount,
+                Id = id.ToString()
+            });
+
+            string message = "Successfully Sent " + amount + " to " + destination;
+
+            TempData[WellKnownTempData.SuccessMessage] = message;
+
+            return Redirect("/");
+        }
+        // TODO: Remove this and refactor the one in nano payment link extension. 
+        private static string XnoToRawString(decimal xno)
+        {
+            // Up to 30 fractional digits; truncate beyond that (don’t round up).
+            var s = xno.ToString("0.##############################", CultureInfo.InvariantCulture);
+            var parts = s.Split('.');
+            var intPart = parts[0].TrimStart('+');
+            var fracPart = parts.Length > 1 ? parts[1] : string.Empty;
+
+            if (fracPart.Length > 30)
+                fracPart = fracPart.Substring(0, 30);
+
+            var combined = (intPart + fracPart.PadRight(30, '0')).TrimStart('0');
+            return string.IsNullOrEmpty(combined) ? "0" : combined;
+        }
+
+        // TODO: Remove this and refactor the one in nano blockchain listener. 
+        private static string RawToNanoString(string rawStr)
+        {
+            if (string.IsNullOrWhiteSpace(rawStr))
+                return "0";
+            if (!BigInteger.TryParse(rawStr, out var raw))
+                return "0";
+
+            var unit = BigInteger.Pow(10, 30); // 1 NANO = 10^30 raw
+            var integer = BigInteger.DivRem(raw, unit, out var remainder);
+
+            if (remainder.IsZero)
+                return integer.ToString();
+
+            var frac = remainder.ToString().PadLeft(30, '0').TrimEnd('0');
+            return $"{integer}.{frac}";
         }
 
         [HttpGet("{cryptoCode}/walletreceive")]

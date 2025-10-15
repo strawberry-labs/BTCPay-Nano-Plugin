@@ -28,18 +28,18 @@ namespace BTCPayServer.Plugins.Nano.ViewModels
             [Required]
             // NANO: BTC amount range not applicable
             // [Range(1E-08, 21E6)]
-            public decimal? Amount { get; set; }
+            public string? Amount { get; set; }
 
             // NANO: No network fees to subtract from outputs
             // [Display(Name = "Subtract fees from amount")]
             // public bool SubtractFeesFromOutput { get; set; }
 
-            public string PayoutId { get; set; }
+            // public string PayoutId { get; set; }
 
-            public string[] Labels { get; set; } = Array.Empty<string>();
+            // public string[] Labels { get; set; } = Array.Empty<string>();
         }
 
-        public decimal CurrentBalance { get; set; }
+        public string CurrentBalance { get; set; }
 
         // NANO: No mining concept; if needed use a separate Pending/Receivable balance instead
         // public decimal ImmatureBalance { get; set; }

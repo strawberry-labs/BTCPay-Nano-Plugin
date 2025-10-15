@@ -30,6 +30,7 @@ namespace BTCPayServer.Plugins.Nano.Payments
         }
 
         // Converts XNO decimal to a raw string (scaled by 10^30) without overflow.
+        // TODO: Refactor
         private static string XnoToRawString(decimal xno)
         {
             // Up to 30 fractional digits; truncate beyond that (don’t round up).
