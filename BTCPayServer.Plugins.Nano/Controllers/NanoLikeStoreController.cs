@@ -174,6 +174,17 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             }
 
             var currentBalance = "0";
+            List<NanoTransaction> history;
+            string nextHash = "";
+
+            var vm = new NanoListTransactionsViewModel
+            {
+                // WalletId = walletId,
+                CryptoCode = "XNO",
+                Page = 1,
+                PageSize = 50,
+                CurrentBalanceNano = currentBalance
+            };
 
             try
             {
@@ -198,6 +209,32 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                     "account_info", new AccountInfoRequest { Account = account });
 
                 currentBalance = RawToNanoString(info.Balance);
+
+                vm.CurrentBalanceNano = currentBalance;
+
+                var transactionHistory = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountHistoryRequest, AccountHistoryResponse>(
+                    "account_history", new AccountHistoryRequest { Account = account, Count = "10" });
+
+                history = transactionHistory.History;
+                nextHash = transactionHistory.Previous;
+
+                var modifiedHistory = history.Select((tx, i) =>
+            {
+
+                return MakeTx(
+                    timestamp: DateTimeOffset.FromUnixTimeSeconds(long.Parse(tx.Local_Timestamp)),
+                    confirmed: true,
+                    positive: tx.Type == "receive",
+                    nanoAmount: decimal.Parse(RawToNanoString(tx.Amount)),
+                    address: tx.Account,
+                    comment: "",
+                    tags: new[] { "Nano Transaction" },
+                    rate: null,
+                    hash: tx.Hash
+                );
+            }).ToList();
+
+                vm.Transactions = modifiedHistory;
             }
             catch (Exception ex)
             {
@@ -208,30 +245,22 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             // var vm = GetNanoLikePaymentMethodViewModel(StoreData, cryptoCode,
             //     StoreData.GetStoreBlob().GetExcludedPaymentMethods(), await GetAccounts(cryptoCode));
 
-            var rateUsdPerNano = 7.25m;
+            // var rateUsdPerNano = 7.25m;
 
-            var vm = new NanoListTransactionsViewModel
-            {
-                // WalletId = walletId,
-                CryptoCode = "XNO",
-                Page = 1,
-                PageSize = 50,
-                CurrentBalanceNano = currentBalance
-            };
+            // vm.Labels.Add(("Deposit", "#E3F2FD", "#0D47A1"));
+            // vm.Labels.Add(("Withdrawal", "#FCE4EC", "#AD1457"));
+            // vm.Labels.Add(("Invoice", "#E8F5E9", "#1B5E20"));
 
-            vm.Labels.Add(("Deposit", "#E3F2FD", "#0D47A1"));
-            vm.Labels.Add(("Withdrawal", "#FCE4EC", "#AD1457"));
-            vm.Labels.Add(("Invoice", "#E8F5E9", "#1B5E20"));
-
-            vm.Transactions.Add(MakeTx(
-            timestamp: DateTimeOffset.UtcNow.AddMinutes(-5),
-            confirmed: true,
-            positive: true,
-            nanoAmount: 1.234m,
-            address: "nano_3receiveaddress11111111111111111111111111111111111111111",
-            comment: "Payment for Invoice #1234",
-            tags: new[] { "Invoice", "customer:ALPHA" },
-            rate: rateUsdPerNano));
+            // vm.Transactions.CopyTo(modifiedHistory);
+            // vm.Transactions.Add(MakeTx(
+            // timestamp: DateTimeOffset.UtcNow.AddMinutes(-5),
+            // confirmed: true,
+            // positive: true,
+            // nanoAmount: 1.234m,
+            // address: "nano_3receiveaddress11111111111111111111111111111111111111111",
+            // comment: "Payment for Invoice #1234",
+            // tags: new[] { "Invoice", "customer:ALPHA" },
+            // rate: rateUsdPerNano));
 
             vm.Total = vm.Transactions.Count;
 
@@ -246,9 +275,10 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         string address,
         string comment,
         IEnumerable<string> tags,
-        decimal? rate)
+        decimal? rate,
+        string hash)
         {
-            var id = "MOCK_" + Guid.NewGuid().ToString("N").Substring(0, 16);
+            var id = hash;
             var signedAmount = positive ? nanoAmount : -nanoAmount;
             var fiat = rate.HasValue ? signedAmount * rate.Value : (decimal?)null;
 
