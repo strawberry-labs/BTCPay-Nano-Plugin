@@ -41,6 +41,7 @@ namespace BTCPayServer.Plugins.Nano.Services
         private readonly PaymentService _paymentService;
         private readonly NanoAdhocAddressService _nanoAdhocAddressService;
         private readonly NanoBlockchainListenerHostedService _nanoBlockchainListenerHostedService;
+        private readonly IBackgroundTaskQueue _paymentsTaskQueue;
 
         public NanoListener(
             InvoiceRepository invoiceRepository,
@@ -54,6 +55,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             NanoAdhocAddressService nanoAdhocAddressService,
             NanoLikePaymentConfigService nanoLikePaymentConfigService,
             NanoBlockchainListenerHostedService nanoBlockchainListenerHostedService,
+            IBackgroundTaskQueue paymentsTaskQueue,
             PaymentService paymentService) : base(eventAggregator, logger)
         {
             _invoiceRepository = invoiceRepository;
@@ -68,6 +70,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             _nanoAdhocAddressService = nanoAdhocAddressService;
             _nanoLikePaymentConfigService = nanoLikePaymentConfigService;
             _nanoBlockchainListenerHostedService = nanoBlockchainListenerHostedService;
+            _paymentsTaskQueue = paymentsTaskQueue;
         }
 
         protected override void SubscribeToEvents()
@@ -140,9 +143,13 @@ namespace BTCPayServer.Plugins.Nano.Services
                     try
                     {
                         var adhoc = e.ToAccount ?? e.Account;
+                        var invoiceIdOfAdhoc = await _nanoAdhocAddressService.GetInvoiceIdFromAccount(adhoc, ct);
                         if (!string.IsNullOrEmpty(adhoc))
                         {
-                            await CreateReceiveBlockViaRpc(e, cryptoCode, adhoc, e.BlockHash, ct);
+                            _paymentsTaskQueue.QueueTask(invoiceIdOfAdhoc, async token =>
+                            {
+                                await RunWithRetriesAsync(async token => { await CreateReceiveBlockViaRpc(e, cryptoCode, adhoc, e.BlockHash, ct); }, maxRetries: 3, cancellationToken: ct);
+                            });
                         }
                     }
                     catch (Exception ex)
@@ -169,8 +176,9 @@ namespace BTCPayServer.Plugins.Nano.Services
 
                 case NanoEventKind.ReceiveOnAdhocConfirmed:
                     Console.WriteLine("RECEIVE ON ADHOC EVENT");
+                    var invoiceId = await _nanoAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
                     // Funds are now received on the adhoc account. Record/update payment, then sweep if fully paid.
-                    await OnAdhocReceiveConfirmed(cryptoCode, pmi, handler, e, ct);
+                    _paymentsTaskQueue.QueueTask(invoiceId, async token => { await OnAdhocReceiveConfirmed(cryptoCode, pmi, handler, e, ct); });
                     break;
 
                     // case NanoEventKind.ReceiveOnStoreWalletConfirmed:
@@ -346,7 +354,7 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task SweepAdhocToStoreWallet(NanoEvent e, string cryptoCode, string fromAdhoc, string toWallet, CancellationToken ct)
         {
-            await CreateSendBlockViaRpc(e, cryptoCode, fromAdhoc, toWallet, amountRaw: null, sweepAll: true, ct);
+            await RunWithRetriesAsync(async token => { await CreateSendBlockViaRpc(e, cryptoCode, fromAdhoc, toWallet, amountRaw: null, sweepAll: true, ct); }, maxRetries: 3, cancellationToken: ct);
         }
 
         private async Task ReceivedPayment(InvoiceEntity invoice, PaymentEntity payment)
@@ -578,6 +586,8 @@ namespace BTCPayServer.Plugins.Nano.Services
             return "nano_1xnopay1bfmyx5eit8ut4gg1j488kt8bjukijerbn37jh3wdm81y6mxjg8qj";
         }
 
+        // TODO: Refactor these utils
+
         private static string RawAdd(string a, string b)
         {
             var ai = ParseRaw(a);
@@ -638,6 +648,44 @@ namespace BTCPayServer.Plugins.Nano.Services
 
             Console.WriteLine(result);
             return negative ? -result : result;
+        }
+
+        public static async Task RunWithRetriesAsync(
+        Func<CancellationToken, Task> task,
+        int maxRetries = 3,
+        TimeSpan? delayBetweenRetries = null,
+        CancellationToken cancellationToken = default)
+        {
+            int attempt = 0;
+            Exception lastException = null;
+
+            delayBetweenRetries ??= TimeSpan.FromSeconds(2); // default delay
+
+            while (attempt < maxRetries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    await task(cancellationToken);
+                    return; // success
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    attempt++;
+
+                    Console.WriteLine($"[Retry {attempt}] Task failed: {ex.Message}");
+
+                    if (attempt < maxRetries)
+                    {
+                        await Task.Delay(delayBetweenRetries.Value, cancellationToken);
+                    }
+                }
+            }
+
+            // Final failure after all retries
+            Console.WriteLine($"Task failed after {maxRetries} attempts: {lastException?.Message}");
+            throw lastException!;
         }
     }
 
