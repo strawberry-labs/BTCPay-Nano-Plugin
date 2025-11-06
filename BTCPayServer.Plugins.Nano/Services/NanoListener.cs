@@ -146,10 +146,22 @@ namespace BTCPayServer.Plugins.Nano.Services
                         var invoiceIdOfAdhoc = await _nanoAdhocAddressService.GetInvoiceIdFromAccount(adhoc, ct);
                         if (!string.IsNullOrEmpty(adhoc))
                         {
-                            _paymentsTaskQueue.QueueTask(invoiceIdOfAdhoc, async token =>
+                            Task.Run(async () =>
+                        {
+                            try
                             {
                                 await RunWithRetriesAsync(async token => { await CreateReceiveBlockViaRpc(e, cryptoCode, adhoc, e.BlockHash, ct); }, maxRetries: 3, cancellationToken: ct);
-                            });
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log error
+                                Console.WriteLine("Error - " + ex);
+                            }
+                        }, ct);
+                            // _paymentsTaskQueue.QueueTask(invoiceIdOfAdhoc, async token =>
+                            // {
+                            //     await RunWithRetriesAsync(async token => { await CreateReceiveBlockViaRpc(e, cryptoCode, adhoc, e.BlockHash, ct); }, maxRetries: 3, cancellationToken: ct);
+                            // });
                         }
                     }
                     catch (Exception ex)
@@ -178,7 +190,19 @@ namespace BTCPayServer.Plugins.Nano.Services
                     Console.WriteLine("RECEIVE ON ADHOC EVENT");
                     var invoiceId = await _nanoAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
                     // Funds are now received on the adhoc account. Record/update payment, then sweep if fully paid.
-                    _paymentsTaskQueue.QueueTask(invoiceId, async token => { await OnAdhocReceiveConfirmed(cryptoCode, pmi, handler, e, ct); });
+                    Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await OnAdhocReceiveConfirmed(cryptoCode, pmi, handler, e, ct);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log error
+                                Console.WriteLine("Error - " + ex);
+                            }
+                        }, ct);
+                    // _paymentsTaskQueue.QueueTask(invoiceId, async token => { await OnAdhocReceiveConfirmed(cryptoCode, pmi, handler, e, ct); });
                     break;
 
                     // case NanoEventKind.ReceiveOnStoreWalletConfirmed:
