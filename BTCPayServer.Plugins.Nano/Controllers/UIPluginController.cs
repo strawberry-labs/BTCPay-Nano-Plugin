@@ -29,5 +29,5 @@ public class UIPluginController : Controller
 
 public class PluginPageViewModel
 {
-    // public List<PluginData> Data { get; set; }
+    public List<PluginData> Data { get; set; }
 }

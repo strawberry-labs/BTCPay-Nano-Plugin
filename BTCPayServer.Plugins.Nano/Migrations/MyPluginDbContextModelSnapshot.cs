@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace BTCPayServer.Plugins.Nano.Data.Migrations
+namespace BTCPayServer.Plugins.Nano.Migrations
 {
     [DbContext(typeof(MyPluginDbContext))]
     partial class MyPluginDbContextModelSnapshot : ModelSnapshot

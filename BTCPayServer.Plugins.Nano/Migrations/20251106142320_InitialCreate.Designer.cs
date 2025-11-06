@@ -8,11 +8,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace BTCPayServer.Plugins.Nano.Data.Migrations
+namespace BTCPayServer.Plugins.Nano.Migrations
 {
     [DbContext(typeof(MyPluginDbContext))]
-    [Migration("20250918115504_InvoiceAdhocAddress-addInvoiceId")]
-    partial class InvoiceAdhocAddressaddInvoiceId
+    [Migration("20251106142320_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -27,23 +27,23 @@ namespace BTCPayServer.Plugins.Nano.Data.Migrations
 
             modelBuilder.Entity("BTCPayServer.Plugins.Nano.Data.InvoiceAdhocAddress", b =>
                 {
-                    b.Property<string>("Id")
+                    b.Property<string>("id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("text");
 
-                    b.Property<string>("Account")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PrivateAddress")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PublicAddress")
+                    b.Property<string>("account")
                         .HasColumnType("text");
 
                     b.Property<string>("invoiceId")
                         .HasColumnType("text");
 
-                    b.HasKey("Id");
+                    b.Property<string>("privateAddress")
+                        .HasColumnType("text");
+
+                    b.Property<string>("publicAddress")
+                        .HasColumnType("text");
+
+                    b.HasKey("id");
 
                     b.ToTable("InvoiceAdhocAddress", "BTCPayServer.Plugins.Nano");
                 });
