@@ -45,7 +45,6 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         private readonly StoreRepository _StoreRepository;
         private readonly NanoRPCProvider _NanoRpcProvider;
         private readonly PaymentMethodHandlerDictionary _handlers;
-        // private readonly NanoRateService _nanoRateService;
         private readonly DefaultRulesCollection _defaultRules;
         private readonly RateFetcher _rateFetcher;
         private IStringLocalizer StringLocalizer { get; }
@@ -53,7 +52,6 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
         public UINanoLikeStoreController(NanoLikeConfiguration nanoLikeConfiguration,
             StoreRepository storeRepository, NanoRPCProvider nanoRpcProvider,
-              //  NanoRateService nanoRateService,
               DefaultRulesCollection defaultRules, RateFetcher rateFetcher,
             PaymentMethodHandlerDictionary handlers,
             IStringLocalizer stringLocalizer, HtmlEncoder html)
@@ -61,7 +59,6 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             _NanoLikeConfiguration = nanoLikeConfiguration;
             _StoreRepository = storeRepository;
             _NanoRpcProvider = nanoRpcProvider;
-            // _nanoRateService = nanoRateService;
             _defaultRules = defaultRules;
             _rateFetcher = rateFetcher;
             _handlers = handlers;
@@ -482,6 +479,14 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             string? defaultDestination = null, string? defaultAmount = null, string[]? bip21 = null,
             [FromQuery] string? returnUrl = null)
         {
+            NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
+
+            if (config.Wallet == null)
+            {
+                TempData[WellKnownTempData.ErrorMessage] = $"Please create a wallet first.";
+                return Redirect("/");
+            }
+
             var store = await _StoreRepository.FindStore(storeId);
 
             var rule = store.GetStoreBlob().GetRateRules(_defaultRules)?.GetRuleFor(new Rating.CurrencyPair(cryptoCode, "USD"));
@@ -495,7 +500,6 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 rate = b;
             }
 
-            NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
             // TODO: Change to account after generating new wallet.
             var account = config.PublicAddress;
 
@@ -504,11 +508,9 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
             var balance = RawToNanoString(info.Balance);
 
-            // Console.WriteLine("RATE - " + rate);
             var vm = new NanoWalletSendModel
             {
                 CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
-                // TODO: Get from wallet
                 CurrentBalance = balance,
                 CryptoDivisibility = 6,
                 FiatDivisibility = 2,
@@ -544,9 +546,13 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         {
             NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
 
-            // TODO: Change this to account once u transfer funds from current wallet and delete it. 
-            // string source = config.Account;
-            string source = config.PublicAddress;
+            if (config.Wallet == null)
+            {
+                TempData[WellKnownTempData.ErrorMessage] = $"Please create a wallet first.";
+                return Redirect("/");
+            }
+
+            string source = config.Account;
             string destination = model.Outputs[0].DestinationAddress;
             string amount = model.Outputs[0].Amount;
             Guid id = Guid.NewGuid();
@@ -555,18 +561,27 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             decimal decimalAmount = Convert.ToDecimal(amount);
             string rawAmount = XnoToRawString(decimalAmount);
 
-            var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<WalletSendRequest, WalletSendResponse>("send", new WalletSendRequest
+            try
             {
-                Wallet = wallet,
-                Source = source,
-                Destination = destination,
-                Amount = rawAmount,
-                Id = id.ToString()
-            });
+                var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<WalletSendRequest, WalletSendResponse>("send", new WalletSendRequest
+                {
+                    Wallet = wallet,
+                    Source = source,
+                    Destination = destination,
+                    Amount = rawAmount,
+                    Id = id.ToString()
+                });
 
-            string message = "Successfully Sent " + amount + " to " + destination;
+                string message = "Successfully Sent " + amount + " to " + destination;
 
-            TempData[WellKnownTempData.SuccessMessage] = message;
+                TempData[WellKnownTempData.SuccessMessage] = message;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+
+                TempData[WellKnownTempData.ErrorMessage] = "Send Failed. Try again in sometime";
+            }
 
             return Redirect("/");
         }
@@ -604,55 +619,60 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             return $"{integer}.{frac}";
         }
 
-        [HttpGet("{cryptoCode}/walletreceive")]
-        public IActionResult WalletReceive(string storeId, string cryptoCode)
-        {
-            // Your view reads Context.GetRouteValue("walletId").ToString();
-            // Ensure it's present to avoid a null.ToString() crash.
-            // if (!RouteData.Values.ContainsKey("walletId"))
-            //     RouteData.Values["walletId"] = "mockwallet";
+        // Not fully implemented since it was not deemed necessary for v1
 
-            var vm = new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel
-            {
-                CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
-                Address = null,      // null => shows the "Generate..." button
-                PaymentLink = null,
-                // Leave ReturnUrl null; your view computes it via Url.Action(...)
-                CryptoImage = Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png") // optional; remove if not available
-            };
+        // [HttpGet("{cryptoCode}/walletreceive")]
+        // public IActionResult WalletReceive(string storeId, string cryptoCode)
+        // {
 
-            // If your view file name is WalletReceive.cshtml under Views/UINanoLikeStore, this is fine:
-            // return View(vm);
-            // Otherwise: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
-            return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
+        //     // Your view reads Context.GetRouteValue("walletId").ToString();
+        //     // Ensure it's present to avoid a null.ToString() crash.
+        //     // if (!RouteData.Values.ContainsKey("walletId"))
+        //     //     RouteData.Values["walletId"] = "mockwallet";
 
-        }
+        //     var vm = new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel
+        //     {
+        //         CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
+        //         Address = null,      // null => shows the "Generate..." button
+        //         PaymentLink = null,
+        //         // Leave ReturnUrl null; your view computes it via Url.Action(...)
+        //         CryptoImage = Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png") // optional; remove if not available
+        //     };
 
-        [HttpPost("{cryptoCode}/walletreceive")]
-        [ValidateAntiForgeryToken]
-        public IActionResult WalletReceive(string storeId, string cryptoCode, [FromForm] string command, [FromForm] NanoWalletReceiveViewModel vm)
-        {
-            // if (!RouteData.Values.ContainsKey("walletId"))
-            //     RouteData.Values["walletId"] = "mockwallet";
-            vm ??= new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel();
-            vm.CryptoCode = string.IsNullOrWhiteSpace(vm.CryptoCode)
-                ? (string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant())
-                : vm.CryptoCode;
+        //     // If your view file name is WalletReceive.cshtml under Views/UINanoLikeStore, this is fine:
+        //     // return View(vm);
+        //     // Otherwise: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
+        //     return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
 
-            vm.CryptoImage ??= Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png"); // optional
+        // }
 
-            if (string.Equals(command, "generate-new-address", StringComparison.OrdinalIgnoreCase))
-            {
-                // Mock address and link
-                var mockAddress = "nano_3mockaddress1x9o7e9q7wz4y7p6r5s4t3u2v1w0x9y8z7a6b5c4d3e2f1";
-                vm.Address = mockAddress;
-                vm.PaymentLink = $"{vm.CryptoCode.ToLowerInvariant()}:{mockAddress}";
-            }
+        // Maybe implement receive in the future
 
-            // return View(vm);
-            // Or: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
-            return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
-        }
+        // [HttpPost("{cryptoCode}/walletreceive")]
+        // [ValidateAntiForgeryToken]
+        // public IActionResult WalletReceive(string storeId, string cryptoCode, [FromForm] string command, [FromForm] NanoWalletReceiveViewModel vm)
+        // {
+        //     // if (!RouteData.Values.ContainsKey("walletId"))
+        //     //     RouteData.Values["walletId"] = "mockwallet";
+        //     vm ??= new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel();
+        //     vm.CryptoCode = string.IsNullOrWhiteSpace(vm.CryptoCode)
+        //         ? (string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant())
+        //         : vm.CryptoCode;
+
+        //     vm.CryptoImage ??= Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png"); // optional
+
+        //     if (string.Equals(command, "generate-new-address", StringComparison.OrdinalIgnoreCase))
+        //     {
+        //         // Mock address and link
+        //         var mockAddress = "nano_3mockaddress1x9o7e9q7wz4y7p6r5s4t3u2v1w0x9y8z7a6b5c4d3e2f1";
+        //         vm.Address = mockAddress;
+        //         vm.PaymentLink = $"{vm.CryptoCode.ToLowerInvariant()}:{mockAddress}";
+        //     }
+
+        //     // return View(vm);
+        //     // Or: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
+        //     return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
+        // }
 
         [HttpGet("{cryptoCode}/walletsettings")]
         public async Task<IActionResult> WalletSettings(string storeId, string cryptoCode)
@@ -664,13 +684,15 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             {
                 NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
 
+                if (config.Wallet == null)
+                {
+                    TempData[WellKnownTempData.ErrorMessage] = $"Please create a wallet first.";
+                    return Redirect("/");
+                }
+
                 enabled = config.Enabled;
                 account = config.Account;
 
-                Console.WriteLine("Wallet details - ");
-                Console.WriteLine(config.Account);
-                Console.WriteLine(config.Wallet);
-                // Console.WriteLine(config.Account);
             }
             catch (Exception e)
             {
@@ -745,11 +767,12 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         public async Task<IActionResult> ConfirmDeleteWallet(string storeId, string cryptoCode)
         {
             NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
-            Console.WriteLine("HERE");
-            Console.WriteLine(storeId);
-            Console.WriteLine(config.Wallet);
-            Console.WriteLine(config.Enabled);
-            if (config.Wallet == null) return Redirect("/");
+
+            if (config.Wallet == null)
+            {
+                TempData[WellKnownTempData.ErrorMessage] = $"There is no wallet to delete.";
+                return Redirect("/");
+            }
 
             await setPaymentConfig(storeId, cryptoCode, new NanoLikePaymentMethodConfiguration
             {
@@ -872,7 +895,6 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
             if (newConfig == null)
             {
-                Console.WriteLine("HERE SETTING CONFIG TO NULL");
                 store.SetPaymentMethodConfig(pmi, null);
                 return;
             }
