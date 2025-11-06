@@ -76,7 +76,6 @@ public class NanoLikePaymentConfigService
 
         if (newConfig == null)
         {
-            Console.WriteLine("HERE SETTING CONFIG TO NULL");
             store.SetPaymentMethodConfig(pmi, null);
             return;
         }

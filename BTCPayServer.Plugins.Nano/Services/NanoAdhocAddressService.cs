@@ -28,7 +28,6 @@ public class NanoAdhocAddressService
 
     async public Task<InvoiceAdhocAddress> PrepareAdhocAddress(string invoiceId)
     {
-        Console.WriteLine("Preparing Adhoc Address In The Adhoc Address Service");
         // Get the adhoc address
         KeyCreateResponse newAccount = await _nanoRpcProvider.RpcClients[_network.CryptoCode].SendCommandAsync<JsonRpcClient.NoRequestModel, KeyCreateResponse>("key_create", JsonRpcClient.NoRequestModel.Instance);
         // KeyCreateResponse newAccount = await _nanoRpcProvider.RpcClients["XNO"].SendCommandAsync<JsonRpcClient.NoRequestModel, KeyCreateResponse>("key_create", JsonRpcClient.NoRequestModel.Instance);
@@ -50,19 +49,9 @@ public class NanoAdhocAddressService
     {
         InvoiceAdhocAddress adhocAddressRecord = await _invoiceAdhocAddressRepository.GetAsyncByAccount(account, ct);
 
-        Console.WriteLine("GETTING PRIVATE ADDRESS for account " + account);
-
-        Console.WriteLine(adhocAddressRecord.privateAddress);
-
         string encPrivKey = adhocAddressRecord.privateAddress;
 
-        Console.WriteLine(encPrivKey);
-
-        // TODO: Uncomment this once all testing of all payment flow is done.
         string decPrivKey = DecryptToHex(encPrivKey);
-        // string decPrivKey = encPrivKey;
-
-        Console.WriteLine(decPrivKey);
 
         return decPrivKey;
     }

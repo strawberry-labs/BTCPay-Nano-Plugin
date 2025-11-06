@@ -33,7 +33,6 @@ namespace BTCPayServer.Plugins.Nano.Payments
 
         public void ModifyCheckoutModel(CheckoutModelContext context)
         {
-            Console.WriteLine("HERE IMAGE " + Image);
             if (context is not { Handler: NanoLikePaymentMethodHandler handler })
             {
                 return;

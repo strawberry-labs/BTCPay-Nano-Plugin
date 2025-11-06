@@ -125,17 +125,6 @@ namespace BTCPayServer.Plugins.Nano.Services
             var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(network.CryptoCode);
             var handler = (NanoLikePaymentMethodHandler)_handlers[pmi];
 
-            Console.WriteLine("Nano Event - ");
-            Console.WriteLine("CryptoCode " + e.CryptoCode);
-            Console.WriteLine("Kind " + e.Kind);
-            Console.WriteLine("Account " + e.Account);
-            Console.WriteLine("Blockhash " + e.BlockHash);
-            Console.WriteLine("AmountRaw " + e.AmountRaw);
-            Console.WriteLine("Confirmation " + e.Confirmation);
-            Console.WriteLine("FromAccount " + e.FromAccount);
-            Console.WriteLine("ToAccount " + e.ToAccount);
-            Console.WriteLine("SourceSendHash " + e.SourceSendHash);
-
             switch (e.Kind)
             {
                 case NanoEventKind.SendToAdhocConfirmed:
@@ -158,10 +147,6 @@ namespace BTCPayServer.Plugins.Nano.Services
                                 Console.WriteLine("Error - " + ex);
                             }
                         }, ct);
-                            // _paymentsTaskQueue.QueueTask(invoiceIdOfAdhoc, async token =>
-                            // {
-                            //     await RunWithRetriesAsync(async token => { await CreateReceiveBlockViaRpc(e, cryptoCode, adhoc, e.BlockHash, ct); }, maxRetries: 3, cancellationToken: ct);
-                            // });
                         }
                     }
                     catch (Exception ex)
@@ -187,7 +172,6 @@ namespace BTCPayServer.Plugins.Nano.Services
                 // break;
 
                 case NanoEventKind.ReceiveOnAdhocConfirmed:
-                    Console.WriteLine("RECEIVE ON ADHOC EVENT");
                     var invoiceId = await _nanoAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
                     // Funds are now received on the adhoc account. Record/update payment, then sweep if fully paid.
                     Task.Run(async () =>
@@ -202,7 +186,6 @@ namespace BTCPayServer.Plugins.Nano.Services
                                 Console.WriteLine("Error - " + ex);
                             }
                         }, ct);
-                    // _paymentsTaskQueue.QueueTask(invoiceId, async token => { await OnAdhocReceiveConfirmed(cryptoCode, pmi, handler, e, ct); });
                     break;
 
                     // case NanoEventKind.ReceiveOnStoreWalletConfirmed:
@@ -305,7 +288,6 @@ namespace BTCPayServer.Plugins.Nano.Services
         private async Task OnInvoiceEvent(InvoiceEvent evt, CancellationToken ct)
         {
             // Optionally sweep remaining balance on expiry. Gotta implement. Currently it automatically sends to wallet on every receive. 
-            Console.WriteLine("GOT AN INVOICE EVENT - " + evt.Name);
 
             if (evt.Name == InvoiceEvent.Expired)
             {
@@ -361,14 +343,11 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task RemoveAddressFromWSListener(InvoiceEvent evt, CancellationToken ct)
         {
-            Console.WriteLine("invoice completed - removing address from ws");
             var invoice = evt.Invoice;
             var invoiceId = invoice.Id;
             var storeId = invoice.StoreId;
             var account = await _nanoAdhocAddressService.GetAccountFromInvoiceId(invoiceId, ct);
 
-            Console.WriteLine(storeId);
-            Console.WriteLine(account);
             _nanoBlockchainListenerHostedService.RemoveAddress(new AdhocAddress
             {
                 Address = account,
@@ -415,60 +394,42 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task CreateReceiveBlockViaRpc(NanoEvent e, string cryptoCode, string account, string sourceSendHash, CancellationToken ct)
         {
-            Console.WriteLine("Creating Receive Block");
-
             var rpc = _nanoRpcProvider.RpcClients[cryptoCode];
 
-            Console.WriteLine("1");
             // Get account info (to determine open vs receive and current state)
             AccountInfoResponse info = null;
             bool isOpened = true;
-            Console.WriteLine("2");
+
             try
             {
-                Console.WriteLine("3");
-                Console.WriteLine("Account " + account);
                 info = await rpc.SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
                 "account_info", new AccountInfoRequest { Account = account, Representative = true });
                 if (!string.IsNullOrEmpty(info?.Error))
                 {
-                    Console.WriteLine("4");
                     isOpened = false;
                 }
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine("5.1234");
                 isOpened = false;
             }
 
-            Console.WriteLine("isOpened " + isOpened);
-
-            // // Amount from the source block (raw)
-            // var src = await rpc.SendCommandAsync<BlockInfoRequest, BlockInfoResponse>(
-            // "block_info", new BlockInfoRequest { Hash = sourceSendHash });
-            // if (!string.IsNullOrEmpty(src?.Error))
-            //     throw new InvalidOperationException($"block_info failed for {sourceSendHash}: {src.Error}");
-
             var amountRaw = e.AmountRaw ?? "0";
 
-            Console.WriteLine("5");
             // Representative
             var representative = isOpened
             ? info.Representative
             : await ResolveRepresentativeAsync(cryptoCode, account, ct);
-            Console.WriteLine("6");
+
             if (string.IsNullOrEmpty(representative))
                 throw new InvalidOperationException($"No representative available for opening/receiving on {account}");
 
             // Balances and previous
-            Console.WriteLine("7");
             var previous = isOpened ? info.Frontier : "0";
             var prevBalance = isOpened ? (info.ConfirmedBalance ?? info.Balance ?? "0") : "0";
             var newBalance = RawAdd(prevBalance, amountRaw);
-            Console.WriteLine("8");
+
             // Work root: previous (if opened) else account public key (for open)
             // string workRoot;
             // if (isOpened)
@@ -489,17 +450,13 @@ namespace BTCPayServer.Plugins.Nano.Services
             //     throw new InvalidOperationException("work_generate failed");
 
             // Private key to sign
-            Console.WriteLine("9");
             var privateKey = await _nanoAdhocAddressService.GetPrivateAddress(account, ct);
-            Console.WriteLine("10");
+
             if (string.IsNullOrEmpty(privateKey))
             {
-                Console.WriteLine("11");
                 throw new InvalidOperationException($"No private key available for {account}");
             }
 
-            Console.WriteLine("12");
-            Console.WriteLine("PREVIOUS - " + previous);
             // Create signed state block (subtype receive/open)
             var createReq = new BlockCreateRequest
             {
@@ -512,15 +469,12 @@ namespace BTCPayServer.Plugins.Nano.Services
                 // Work = work.Work,
                 JsonBlock = true
             };
-            Console.WriteLine("13");
             var created = await rpc.SendCommandAsync<BlockCreateRequest, BlockCreateResponse>("block_create", createReq);
             if (created?.Block == null)
                 throw new InvalidOperationException("block_create (receive/open) did not return a block");
-            Console.WriteLine("14");
             // // Process
             var processed = await rpc.SendCommandAsync<ProcessRequest, ProcessResponse>("process",
             new ProcessRequest { JsonBlock = true, Block = created.Block, Subtype = !isOpened ? "open" : "receive" });
-            Console.WriteLine("15");
             _logger.LogInformation("Processed receive/open block for {Account}. send={Source} newHash={Hash} newBalance={Bal}",
             account, sourceSendHash, processed?.Hash, newBalance);
         }
@@ -670,7 +624,6 @@ namespace BTCPayServer.Plugins.Nano.Services
             if (!decimal.TryParse(s, System.Globalization.NumberStyles.AllowDecimalPoint, System.Globalization.CultureInfo.InvariantCulture, out var result))
                 throw new OverflowException("Value too large to fit in decimal.");
 
-            Console.WriteLine(result);
             return negative ? -result : result;
         }
 

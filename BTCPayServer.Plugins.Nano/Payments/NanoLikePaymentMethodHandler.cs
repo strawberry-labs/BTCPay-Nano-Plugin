@@ -58,8 +58,7 @@ namespace BTCPayServer.Plugins.Nano.Payments
                                 Address = adhocAddress.account,
                                 StoreId = invoice.StoreId
                             });
-                            Console.WriteLine("Prepared Address and Started Listening");
-                            Console.WriteLine("Adhoc Address - " + adhocAddress.account + " store id - " + invoice.StoreId);
+
                             return adhocAddress;
                         },
                         // AccountIndex = supportedPaymentMethod.AccountIndex

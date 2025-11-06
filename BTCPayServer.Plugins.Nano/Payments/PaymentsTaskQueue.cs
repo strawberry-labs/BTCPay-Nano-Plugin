@@ -5,6 +5,8 @@ using System.Threading.Channels;
 using System.Security.Cryptography;
 using System.Text;
 
+// Not currently in use
+
 namespace BTCPayServer.Plugins.Nano.Payments
 {
     public class PaymentsTaskQueue : IBackgroundTaskQueue
@@ -17,7 +19,6 @@ namespace BTCPayServer.Plugins.Nano.Payments
             _workerCount = workerCount;
             _channels = new Channel<Func<CancellationToken, Task>>[workerCount];
 
-            Console.WriteLine("Starting Workers");
             for (int i = 0; i < _workerCount; i++)
             {
                 var channel = Channel.CreateUnbounded<Func<CancellationToken, Task>>();
@@ -48,9 +49,7 @@ namespace BTCPayServer.Plugins.Nano.Payments
 
         public void QueueTask(string groupKey, Func<CancellationToken, Task> task)
         {
-            Console.WriteLine("Queueing Task. Key - " + groupKey);
             int index = GetStablePartition(groupKey, _workerCount);
-            Console.WriteLine("Task goes to thread " + index);
             _channels[index].Writer.TryWrite(task);
         }
 

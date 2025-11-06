@@ -30,11 +30,7 @@ namespace BTCPayServer.Plugins.Nano.Services
         private readonly Uri _confirmationsWebSocketUri;
         // Address list + pollers
         private readonly object _addressesLock = new();
-        private readonly List<AdhocAddress> _addresses = new()
-        {
-            // new AdhocAddress { Address = "nano_1brnf63t185usp1cmpbhysnmaid7igetsyhd4j7sxemqh1pb9sg8oemb7czs", StoreId="DqnRiFAzhya6EUo2rdBh52qM1RaK9XT6UHFKRQrz84fE" }
-            // new AdhocAddress { Address = "nano_11frmgxjp8kacwi6ucpu9g6go9o7k1oojwzep3aca76pca7nujkpz79r17mb", StoreId="DqnRiFAzhya6EUo2rdBh52qM1RaK9XT6UHFKRQrz84fE" }
-        };
+        private readonly List<AdhocAddress> _addresses;
         private readonly Dictionary<(string CryptoCode, string Address), CancellationTokenSource> _pollers = new();
 
         // WS state
