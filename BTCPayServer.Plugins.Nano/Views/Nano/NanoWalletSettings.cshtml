@@ -103,12 +103,12 @@
         <span asp-validation-for="Label" class="text-danger"></span>
     </div> *@
 
-    @if (!string.IsNullOrEmpty(Model.PublicAddress))
+    @if (!string.IsNullOrEmpty(Model.Account))
     {
         <div class="form-group">
-            <label asp-for="PublicAddress" class="form-label">Public Address</label>
-            <div class="input-group clipboard-button" data-clipboard="@Model.PublicAddress">
-                <input asp-for="PublicAddress" class="form-control" readonly />
+            <label asp-for="Account" class="form-label">Public Address</label>
+            <div class="input-group clipboard-button" data-clipboard="@Model.Account">
+                <input asp-for="Account" class="form-control" readonly />
                 <button type="button" class="btn btn-outline-secondary px-3">
                     <vc:icon symbol="actions-copy" />
                 </button>

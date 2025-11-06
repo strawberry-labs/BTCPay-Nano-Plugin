@@ -19,15 +19,15 @@ public class MyPluginService
     {
         await using var context = _pluginDbContextFactory.CreateContext();
 
-        await context.PluginRecords.AddAsync(new PluginData { Timestamp = DateTimeOffset.UtcNow });
-        await context.SaveChangesAsync();
+        // await context.PluginRecords.AddAsync(new PluginData { Timestamp = DateTimeOffset.UtcNow });
+        // await context.SaveChangesAsync();
     }
 
-    public async Task<List<PluginData>> Get()
-    {
-        await using var context = _pluginDbContextFactory.CreateContext();
+    // public async Task<List<PluginData>> Get()
+    // {
+    //     await using var context = _pluginDbContextFactory.CreateContext();
 
-        return await context.PluginRecords.ToListAsync();
-    }
+    //     // return await context.PluginRecords.ToListAsync();
+    // }
 }
 

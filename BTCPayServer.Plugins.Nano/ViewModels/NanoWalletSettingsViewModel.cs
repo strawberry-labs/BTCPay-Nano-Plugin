@@ -20,7 +20,7 @@ namespace BTCPayServer.Plugins.Nano.ViewModels
         [Display(Name = "Label")]
         public string Label { get; set; }
 
-        public string PublicAddress { get; set; }
+        public string Account { get; set; }
 
         // Keep names used by the view; for Nano this can be the primary account/address or pubkey
         // [Display(Name = "Primary account")]

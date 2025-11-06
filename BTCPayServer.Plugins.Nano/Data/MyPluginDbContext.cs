@@ -19,11 +19,13 @@ public class MyPluginDbContext : DbContext
         _designTime = designTime;
     }
 
-    public DbSet<PluginData> PluginRecords { get; set; }
+    // public DbSet<PluginData> PluginRecords { get; set; }
+
+    public DbSet<InvoiceAdhocAddress> InvoiceAdhocAddress { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.HasDefaultSchema("BTCPayServer.Plugins.Template");
+        modelBuilder.HasDefaultSchema("BTCPayServer.Plugins.Nano");
     }
 }

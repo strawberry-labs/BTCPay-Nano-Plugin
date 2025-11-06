@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -8,6 +9,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System.Text.Encodings.Web;
+using System.Numerics;
 
 using BTCPayServer.Abstractions.Constants;
 using BTCPayServer.Abstractions.Extensions;
@@ -19,6 +21,7 @@ using BTCPayServer.Plugins.Nano.Configuration;
 using BTCPayServer.Plugins.Nano.Payments;
 using BTCPayServer.Plugins.Nano.RPC.Models;
 using BTCPayServer.Plugins.Nano.Services;
+using BTCPayServer.Services.Rates;
 using BTCPayServer.Plugins.Nano.ViewModels;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Stores;
@@ -42,17 +45,22 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         private readonly StoreRepository _StoreRepository;
         private readonly NanoRPCProvider _NanoRpcProvider;
         private readonly PaymentMethodHandlerDictionary _handlers;
+        private readonly DefaultRulesCollection _defaultRules;
+        private readonly RateFetcher _rateFetcher;
         private IStringLocalizer StringLocalizer { get; }
         private readonly HtmlEncoder _html;
 
         public UINanoLikeStoreController(NanoLikeConfiguration nanoLikeConfiguration,
             StoreRepository storeRepository, NanoRPCProvider nanoRpcProvider,
+              DefaultRulesCollection defaultRules, RateFetcher rateFetcher,
             PaymentMethodHandlerDictionary handlers,
             IStringLocalizer stringLocalizer, HtmlEncoder html)
         {
             _NanoLikeConfiguration = nanoLikeConfiguration;
             _StoreRepository = storeRepository;
             _NanoRpcProvider = nanoRpcProvider;
+            _defaultRules = defaultRules;
+            _rateFetcher = rateFetcher;
             _handlers = handlers;
             StringLocalizer = stringLocalizer;
             _html = html;
@@ -60,25 +68,26 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
         public StoreData StoreData => HttpContext.GetStoreData();
 
-        [HttpGet()]
-        public async Task<IActionResult> GetStoreNanoLikePaymentMethods()
-        {
-            return View("/Views/Nano/GetStoreNanoLikePaymentMethods.cshtml", await GetVM(StoreData));
-        }
+        // [HttpGet()]
+        // public async Task<IActionResult> GetStoreNanoLikePaymentMethods()
+        // {
+        //     return View("/Views/Nano/GetStoreNanoLikePaymentMethods.cshtml", await GetVM(StoreData));
+        // }
         [NonAction]
         public async Task<NanoLikePaymentMethodListViewModel> GetVM(StoreData storeData)
         {
             var excludeFilters = storeData.GetStoreBlob().GetExcludedPaymentMethods();
 
-            var accountsList = _NanoLikeConfiguration.NanoLikeConfigurationItems.ToDictionary(pair => pair.Key,
-                pair => GetAccounts(pair.Key));
+            // var accountsList = _NanoLikeConfiguration.NanoLikeConfigurationItems.ToDictionary(pair => pair.Key,
+            //     pair => GetAccounts(pair.Key));
 
-            await Task.WhenAll(accountsList.Values);
+            // await Task.WhenAll(accountsList.Values);
             return new NanoLikePaymentMethodListViewModel()
             {
                 Items = _NanoLikeConfiguration.NanoLikeConfigurationItems.Select(pair =>
-                    GetNanoLikePaymentMethodViewModel(storeData, pair.Key, excludeFilters,
-                        accountsList[pair.Key].Result))
+                    GetNanoLikePaymentMethodViewModel(storeData, pair.Key, excludeFilters
+                        // accountsList[pair.Key].Result
+                        ))
             };
         }
 
@@ -86,7 +95,9 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         {
             try
             {
-                if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary) && summary.WalletAvailable)
+                if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary)
+                // && summary.WalletAvailable
+                )
                 {
 
                     return _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<GetAccountsRequest, GetAccountsResponse>("get_accounts", new GetAccountsRequest());
@@ -102,7 +113,9 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
         private NanoLikePaymentMethodViewModel GetNanoLikePaymentMethodViewModel(
             StoreData storeData, string cryptoCode,
-            IPaymentFilter excludeFilters, GetAccountsResponse accountsResponse)
+            IPaymentFilter excludeFilters
+            // GetAccountsResponse accountsResponse
+            )
         {
             var nano = storeData.GetPaymentMethodConfigs(_handlers)
                 .Where(s => s.Value is NanoPaymentPromptDetails)
@@ -112,22 +125,22 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             _NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary);
             _NanoLikeConfiguration.NanoLikeConfigurationItems.TryGetValue(cryptoCode,
                 out var configurationItem);
-            var accounts = accountsResponse?.SubaddressAccounts?.Select(account =>
-                new SelectListItem(
-                    $"{account.AccountIndex} - {(string.IsNullOrEmpty(account.Label) ? "No label" : account.Label)}",
-                    account.AccountIndex.ToString(CultureInfo.InvariantCulture)));
+            // var accounts = accountsResponse?.SubaddressAccounts?.Select(account =>
+            //     new SelectListItem(
+            //         $"{account.AccountIndex} - {(string.IsNullOrEmpty(account.Label) ? "No label" : account.Label)}",
+            //         account.AccountIndex.ToString(CultureInfo.InvariantCulture)));
 
-            var settlementThresholdChoice = NanoLikeSettlementThresholdChoice.StoreSpeedPolicy;
-            if (settings != null && settings.InvoiceSettledConfirmationThreshold is { } confirmations)
-            {
-                settlementThresholdChoice = confirmations switch
-                {
-                    0 => NanoLikeSettlementThresholdChoice.ZeroConfirmation,
-                    1 => NanoLikeSettlementThresholdChoice.AtLeastOne,
-                    10 => NanoLikeSettlementThresholdChoice.AtLeastTen,
-                    _ => NanoLikeSettlementThresholdChoice.Custom
-                };
-            }
+            // var settlementThresholdChoice = NanoLikeSettlementThresholdChoice.StoreSpeedPolicy;
+            // if (settings != null && settings.InvoiceSettledConfirmationThreshold is { } confirmations)
+            // {
+            //     settlementThresholdChoice = confirmations switch
+            //     {
+            //         0 => NanoLikeSettlementThresholdChoice.ZeroConfirmation,
+            //         1 => NanoLikeSettlementThresholdChoice.AtLeastOne,
+            //         10 => NanoLikeSettlementThresholdChoice.AtLeastTen,
+            //         _ => NanoLikeSettlementThresholdChoice.Custom
+            //     };
+            // }
 
             return new NanoLikePaymentMethodViewModel()
             {
@@ -136,15 +149,15 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                     !excludeFilters.Match(PaymentTypes.CHAIN.GetPaymentMethodId(cryptoCode)),
                 Summary = summary,
                 CryptoCode = cryptoCode,
-                AccountIndex = settings?.AccountIndex ?? accountsResponse?.SubaddressAccounts?.FirstOrDefault()?.AccountIndex ?? 0,
-                Accounts = accounts == null ? null : new SelectList(accounts, nameof(SelectListItem.Value),
-                    nameof(SelectListItem.Text)),
-                SettlementConfirmationThresholdChoice = settlementThresholdChoice,
-                CustomSettlementConfirmationThreshold =
-                    settings != null &&
-                    settlementThresholdChoice is NanoLikeSettlementThresholdChoice.Custom
-                        ? settings.InvoiceSettledConfirmationThreshold
-                        : null
+                AddressId = settings?.AddressId,
+                // Accounts = accounts == null ? null : new SelectList(accounts, nameof(SelectListItem.Value),
+                //     nameof(SelectListItem.Text)),
+                // SettlementConfirmationThresholdChoice = settlementThresholdChoice,
+                // CustomSettlementConfirmationThreshold =
+                //     settings != null &&
+                //     settlementThresholdChoice is NanoLikeSettlementThresholdChoice.Custom
+                //         ? settings.InvoiceSettledConfirmationThreshold
+                //         : null
             };
         }
 
@@ -156,6 +169,19 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             {
                 return NotFound();
             }
+
+            var currentBalance = "0";
+            List<NanoTransaction> history;
+            string nextHash = "";
+
+            var vm = new NanoListTransactionsViewModel
+            {
+                // WalletId = walletId,
+                CryptoCode = "XNO",
+                Page = 1,
+                PageSize = 50,
+                CurrentBalanceNano = currentBalance
+            };
 
             try
             {
@@ -172,6 +198,40 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                     return View("/Views/Nano/SetupNanoWallet.cshtml", walletSetupVm);
                 }
                 // use nanoCfg
+
+                // TODO: Change to account after generating new wallet.
+                var account = nanoCfg.PublicAddress;
+
+                var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
+                    "account_info", new AccountInfoRequest { Account = account });
+
+                currentBalance = RawToNanoString(info.Balance);
+
+                vm.CurrentBalanceNano = currentBalance;
+
+                var transactionHistory = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountHistoryRequest, AccountHistoryResponse>(
+                    "account_history", new AccountHistoryRequest { Account = account, Count = "10" });
+
+                history = transactionHistory.History;
+                nextHash = transactionHistory.Previous;
+
+                var modifiedHistory = history.Select((tx, i) =>
+            {
+
+                return MakeTx(
+                    timestamp: DateTimeOffset.FromUnixTimeSeconds(long.Parse(tx.Local_Timestamp)),
+                    confirmed: true,
+                    positive: tx.Type == "receive",
+                    nanoAmount: decimal.Parse(RawToNanoString(tx.Amount)),
+                    address: tx.Account,
+                    comment: "",
+                    tags: new[] { "Nano Transaction" },
+                    rate: null,
+                    hash: tx.Hash
+                );
+            }).ToList();
+
+                vm.Transactions = modifiedHistory;
             }
             catch (Exception ex)
             {
@@ -182,30 +242,22 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             // var vm = GetNanoLikePaymentMethodViewModel(StoreData, cryptoCode,
             //     StoreData.GetStoreBlob().GetExcludedPaymentMethods(), await GetAccounts(cryptoCode));
 
-            var rateUsdPerNano = 7.25m;
+            // var rateUsdPerNano = 7.25m;
 
-            var vm = new NanoListTransactionsViewModel
-            {
-                // WalletId = walletId,
-                CryptoCode = "XNO",
-                Page = 1,
-                PageSize = 50,
-                CurrentBalanceNano = 13.234m
-            };
+            // vm.Labels.Add(("Deposit", "#E3F2FD", "#0D47A1"));
+            // vm.Labels.Add(("Withdrawal", "#FCE4EC", "#AD1457"));
+            // vm.Labels.Add(("Invoice", "#E8F5E9", "#1B5E20"));
 
-            vm.Labels.Add(("Deposit", "#E3F2FD", "#0D47A1"));
-            vm.Labels.Add(("Withdrawal", "#FCE4EC", "#AD1457"));
-            vm.Labels.Add(("Invoice", "#E8F5E9", "#1B5E20"));
-
-            vm.Transactions.Add(MakeTx(
-            timestamp: DateTimeOffset.UtcNow.AddMinutes(-5),
-            confirmed: true,
-            positive: true,
-            nanoAmount: 1.234m,
-            address: "nano_3receiveaddress11111111111111111111111111111111111111111",
-            comment: "Payment for Invoice #1234",
-            tags: new[] { "Invoice", "customer:ALPHA" },
-            rate: rateUsdPerNano));
+            // vm.Transactions.CopyTo(modifiedHistory);
+            // vm.Transactions.Add(MakeTx(
+            // timestamp: DateTimeOffset.UtcNow.AddMinutes(-5),
+            // confirmed: true,
+            // positive: true,
+            // nanoAmount: 1.234m,
+            // address: "nano_3receiveaddress11111111111111111111111111111111111111111",
+            // comment: "Payment for Invoice #1234",
+            // tags: new[] { "Invoice", "customer:ALPHA" },
+            // rate: rateUsdPerNano));
 
             vm.Total = vm.Transactions.Count;
 
@@ -220,9 +272,10 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         string address,
         string comment,
         IEnumerable<string> tags,
-        decimal? rate)
+        decimal? rate,
+        string hash)
         {
-            var id = "MOCK_" + Guid.NewGuid().ToString("N").Substring(0, 16);
+            var id = hash;
             var signedAmount = positive ? nanoAmount : -nanoAmount;
             var fiat = rate.HasValue ? signedAmount * rate.Value : (decimal?)null;
 
@@ -250,174 +303,174 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             return $"{sign}{abs.ToString("N6", CultureInfo.InvariantCulture)} NANO";
         }
 
-        [HttpPost("{cryptoCode}")]
-        [DisableRequestSizeLimit]
-        public async Task<IActionResult> GetStoreNanoLikePaymentMethod(NanoLikePaymentMethodViewModel viewModel, string command, string cryptoCode)
-        {
-            cryptoCode = cryptoCode.ToUpperInvariant();
-            if (!_NanoLikeConfiguration.NanoLikeConfigurationItems.TryGetValue(cryptoCode,
-                out var configurationItem))
-            {
-                return NotFound();
-            }
+        // [HttpPost("{cryptoCode}")]
+        // [DisableRequestSizeLimit]
+        // public async Task<IActionResult> GetStoreNanoLikePaymentMethod(NanoLikePaymentMethodViewModel viewModel, string command, string cryptoCode)
+        // {
+        //     cryptoCode = cryptoCode.ToUpperInvariant();
+        //     if (!_NanoLikeConfiguration.NanoLikeConfigurationItems.TryGetValue(cryptoCode,
+        //         out var configurationItem))
+        //     {
+        //         return NotFound();
+        //     }
 
-            if (command == "add-account")
-            {
-                try
-                {
-                    // var newAccount = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("create_account", new CreateAccountRequest()
-                    // {
-                    //     Label = viewModel.NewAccountLabel
-                    // });
-                    // viewModel.AccountIndex = newAccount.AccountIndex;
-                }
-                catch (Exception)
-                {
-                    ModelState.AddModelError(nameof(viewModel.AccountIndex), StringLocalizer["Could not create a new account."]);
-                }
+        //     if (command == "add-account")
+        //     {
+        //         try
+        //         {
+        //             // var newAccount = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("create_account", new CreateAccountRequest()
+        //             // {
+        //             //     Label = viewModel.NewAccountLabel
+        //             // });
+        //             // viewModel.AccountIndex = newAccount.AccountIndex;
+        //         }
+        //         catch (Exception)
+        //         {
+        //             ModelState.AddModelError(nameof(viewModel.AccountIndex), StringLocalizer["Could not create a new account."]);
+        //         }
 
-            }
-            else if (command == "upload-wallet")
-            {
-                var valid = true;
-                if (viewModel.WalletFile == null)
-                {
-                    ModelState.AddModelError(nameof(viewModel.WalletFile), StringLocalizer["Please select the view-only wallet file"]);
-                    valid = false;
-                }
-                if (viewModel.WalletKeysFile == null)
-                {
-                    ModelState.AddModelError(nameof(viewModel.WalletKeysFile), StringLocalizer["Please select the view-only wallet keys file"]);
-                    valid = false;
-                }
-                // if (configurationItem.WalletDirectory == null)
-                // {
-                //     ModelState.AddModelError(nameof(viewModel.WalletFile), StringLocalizer["This installation doesn't support wallet import (BTCPAY_XMR_WALLET_DAEMON_WALLETDIR is not set)"]);
-                //     valid = false;
-                // }
-                if (valid)
-                {
-                    if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary))
-                    {
-                        if (summary.WalletAvailable)
-                        {
-                            TempData.SetStatusMessageModel(new StatusMessageModel
-                            {
-                                Severity = StatusMessageModel.StatusSeverity.Error,
-                                Message = StringLocalizer["There is already an active wallet configured for {0}. Replacing it would break any existing invoices!", cryptoCode].Value
-                            });
-                            return RedirectToAction(nameof(GetStoreNanoLikePaymentMethod),
-                                new { cryptoCode });
-                        }
-                    }
+        //     }
+        //     else if (command == "upload-wallet")
+        //     {
+        //         var valid = true;
+        //         if (viewModel.WalletFile == null)
+        //         {
+        //             ModelState.AddModelError(nameof(viewModel.WalletFile), StringLocalizer["Please select the view-only wallet file"]);
+        //             valid = false;
+        //         }
+        //         if (viewModel.WalletKeysFile == null)
+        //         {
+        //             ModelState.AddModelError(nameof(viewModel.WalletKeysFile), StringLocalizer["Please select the view-only wallet keys file"]);
+        //             valid = false;
+        //         }
+        //         // if (configurationItem.WalletDirectory == null)
+        //         // {
+        //         //     ModelState.AddModelError(nameof(viewModel.WalletFile), StringLocalizer["This installation doesn't support wallet import (BTCPAY_XMR_WALLET_DAEMON_WALLETDIR is not set)"]);
+        //         //     valid = false;
+        //         // }
+        //         if (valid)
+        //         {
+        //             // if (_NanoRpcProvider.Summaries.TryGetValue(cryptoCode, out var summary))
+        //             // {
+        //             //     if (summary.WalletAvailable)
+        //             //     {
+        //             //         TempData.SetStatusMessageModel(new StatusMessageModel
+        //             //         {
+        //             //             Severity = StatusMessageModel.StatusSeverity.Error,
+        //             //             Message = StringLocalizer["There is already an active wallet configured for {0}. Replacing it would break any existing invoices!", cryptoCode].Value
+        //             //         });
+        //             //         return RedirectToAction(nameof(GetStoreNanoLikePaymentMethod),
+        //             //             new { cryptoCode });
+        //             //     }
+        //             // }
 
-                    // var fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet");
-                    // using (var fileStream = new FileStream(fileAddress, FileMode.Create))
-                    // {
-                    //     await viewModel.WalletFile.CopyToAsync(fileStream);
-                    //     try
-                    //     {
-                    //         Exec($"chmod 666 {fileAddress}");
-                    //     }
-                    //     catch
-                    //     {
-                    //         // ignored
-                    //     }
-                    // }
+        //             // var fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet");
+        //             // using (var fileStream = new FileStream(fileAddress, FileMode.Create))
+        //             // {
+        //             //     await viewModel.WalletFile.CopyToAsync(fileStream);
+        //             //     try
+        //             //     {
+        //             //         Exec($"chmod 666 {fileAddress}");
+        //             //     }
+        //             //     catch
+        //             //     {
+        //             //         // ignored
+        //             //     }
+        //             // }
 
-                    // fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet.keys");
-                    // using (var fileStream = new FileStream(fileAddress, FileMode.Create))
-                    // {
-                    //     await viewModel.WalletKeysFile.CopyToAsync(fileStream);
-                    //     try
-                    //     {
-                    //         Exec($"chmod 666 {fileAddress}");
-                    //     }
-                    //     catch
-                    //     {
-                    //         // ignored
-                    //     }
-                    // }
+        //             // fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet.keys");
+        //             // using (var fileStream = new FileStream(fileAddress, FileMode.Create))
+        //             // {
+        //             //     await viewModel.WalletKeysFile.CopyToAsync(fileStream);
+        //             //     try
+        //             //     {
+        //             //         Exec($"chmod 666 {fileAddress}");
+        //             //     }
+        //             //     catch
+        //             //     {
+        //             //         // ignored
+        //             //     }
+        //             // }
 
-                    // fileAddress = Path.Combine(configurationItem.WalletDirectory, "password");
-                    // using (var fileStream = new StreamWriter(fileAddress, false))
-                    // {
-                    //     await fileStream.WriteAsync(viewModel.WalletPassword);
-                    //     try
-                    //     {
-                    //         Exec($"chmod 666 {fileAddress}");
-                    //     }
-                    //     catch
-                    //     {
-                    //         // ignored
-                    //     }
-                    // }
+        //             // fileAddress = Path.Combine(configurationItem.WalletDirectory, "password");
+        //             // using (var fileStream = new StreamWriter(fileAddress, false))
+        //             // {
+        //             //     await fileStream.WriteAsync(viewModel.WalletPassword);
+        //             //     try
+        //             //     {
+        //             //         Exec($"chmod 666 {fileAddress}");
+        //             //     }
+        //             //     catch
+        //             //     {
+        //             //         // ignored
+        //             //     }
+        //             // }
 
-                    try
-                    {
-                        var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<OpenWalletRequest, OpenWalletResponse>("open_wallet", new OpenWalletRequest
-                        {
-                            Filename = "wallet",
-                            Password = viewModel.WalletPassword
-                        });
-                        if (response?.Error != null)
-                        {
-                            throw new WalletOpenException(response.Error.Message);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        ModelState.AddModelError(nameof(viewModel.AccountIndex), StringLocalizer["Could not open the wallet: {0}", ex.Message]);
-                        return View("/Views/Nano/GetStoreNanoLikePaymentMethod.cshtml", viewModel);
-                    }
+        //             try
+        //             {
+        //                 var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<OpenWalletRequest, OpenWalletResponse>("open_wallet", new OpenWalletRequest
+        //                 {
+        //                     Filename = "wallet",
+        //                     Password = viewModel.WalletPassword
+        //                 });
+        //                 if (response?.Error != null)
+        //                 {
+        //                     throw new WalletOpenException(response.Error.Message);
+        //                 }
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 ModelState.AddModelError(nameof(viewModel.AccountIndex), StringLocalizer["Could not open the wallet: {0}", ex.Message]);
+        //                 return View("/Views/Nano/GetStoreNanoLikePaymentMethod.cshtml", viewModel);
+        //             }
 
-                    TempData.SetStatusMessageModel(new StatusMessageModel
-                    {
-                        Severity = StatusMessageModel.StatusSeverity.Info,
-                        Message = StringLocalizer["View-only wallet files uploaded. The wallet will soon become available."].Value
-                    });
-                    return RedirectToAction(nameof(GetStoreNanoLikePaymentMethod), new { cryptoCode });
-                }
-            }
+        //             TempData.SetStatusMessageModel(new StatusMessageModel
+        //             {
+        //                 Severity = StatusMessageModel.StatusSeverity.Info,
+        //                 Message = StringLocalizer["View-only wallet files uploaded. The wallet will soon become available."].Value
+        //             });
+        //             return RedirectToAction(nameof(GetStoreNanoLikePaymentMethod), new { cryptoCode });
+        //         }
+        //     }
 
-            if (!ModelState.IsValid)
-            {
+        //     if (!ModelState.IsValid)
+        //     {
 
-                var vm = GetNanoLikePaymentMethodViewModel(StoreData, cryptoCode,
-                    StoreData.GetStoreBlob().GetExcludedPaymentMethods(), await GetAccounts(cryptoCode));
+        //         var vm = GetNanoLikePaymentMethodViewModel(StoreData, cryptoCode,
+        //             StoreData.GetStoreBlob().GetExcludedPaymentMethods(), await GetAccounts(cryptoCode));
 
-                vm.Enabled = viewModel.Enabled;
-                vm.NewAccountLabel = viewModel.NewAccountLabel;
-                vm.AccountIndex = viewModel.AccountIndex;
-                vm.SettlementConfirmationThresholdChoice = viewModel.SettlementConfirmationThresholdChoice;
-                vm.CustomSettlementConfirmationThreshold = viewModel.CustomSettlementConfirmationThreshold;
-                // vm.SupportWalletExport = configurationItem.WalletDirectory is not null;
-                vm.SupportWalletExport = false;
-                return View("/Views/Nano/GetStoreNanoLikePaymentMethod.cshtml", vm);
-            }
+        //         vm.Enabled = viewModel.Enabled;
+        //         vm.NewAccountLabel = viewModel.NewAccountLabel;
+        //         vm.AccountIndex = viewModel.AccountIndex;
+        //         vm.SettlementConfirmationThresholdChoice = viewModel.SettlementConfirmationThresholdChoice;
+        //         vm.CustomSettlementConfirmationThreshold = viewModel.CustomSettlementConfirmationThreshold;
+        //         // vm.SupportWalletExport = configurationItem.WalletDirectory is not null;
+        //         vm.SupportWalletExport = false;
+        //         return View("/Views/Nano/GetStoreNanoLikePaymentMethod.cshtml", vm);
+        //     }
 
-            var storeData = StoreData;
-            var blob = storeData.GetStoreBlob();
-            Console.WriteLine("ABCD Handlers " + _handlers);
-            storeData.SetPaymentMethodConfig(_handlers[PaymentTypes.CHAIN.GetPaymentMethodId(cryptoCode)], new NanoPaymentPromptDetails()
-            {
-                AccountIndex = viewModel.AccountIndex,
-                InvoiceSettledConfirmationThreshold = viewModel.SettlementConfirmationThresholdChoice switch
-                {
-                    NanoLikeSettlementThresholdChoice.ZeroConfirmation => 0,
-                    NanoLikeSettlementThresholdChoice.AtLeastOne => 1,
-                    NanoLikeSettlementThresholdChoice.AtLeastTen => 10,
-                    NanoLikeSettlementThresholdChoice.Custom when viewModel.CustomSettlementConfirmationThreshold is { } custom => custom,
-                    _ => null
-                }
-            });
+        //     var storeData = StoreData;
+        //     var blob = storeData.GetStoreBlob();
+        //     Console.WriteLine("ABCD Handlers " + _handlers);
+        //     storeData.SetPaymentMethodConfig(_handlers[PaymentTypes.CHAIN.GetPaymentMethodId(cryptoCode)], new NanoPaymentPromptDetails()
+        //     {
+        //         AccountIndex = viewModel.AccountIndex,
+        //         InvoiceSettledConfirmationThreshold = viewModel.SettlementConfirmationThresholdChoice switch
+        //         {
+        //             NanoLikeSettlementThresholdChoice.ZeroConfirmation => 0,
+        //             NanoLikeSettlementThresholdChoice.AtLeastOne => 1,
+        //             NanoLikeSettlementThresholdChoice.AtLeastTen => 10,
+        //             NanoLikeSettlementThresholdChoice.Custom when viewModel.CustomSettlementConfirmationThreshold is { } custom => custom,
+        //             _ => null
+        //         }
+        //     });
 
-            blob.SetExcluded(PaymentTypes.CHAIN.GetPaymentMethodId(viewModel.CryptoCode), !viewModel.Enabled);
-            storeData.SetStoreBlob(blob);
-            await _StoreRepository.UpdateStore(storeData);
-            return RedirectToAction("GetStoreNanoLikePaymentMethods",
-                new { StatusMessage = $"{cryptoCode} settings updated successfully", storeId = StoreData.Id });
-        }
+        //     blob.SetExcluded(PaymentTypes.CHAIN.GetPaymentMethodId(viewModel.CryptoCode), !viewModel.Enabled);
+        //     storeData.SetStoreBlob(blob);
+        //     await _StoreRepository.UpdateStore(storeData);
+        //     return RedirectToAction("GetStoreNanoLikePaymentMethods",
+        //         new { StatusMessage = $"{cryptoCode} settings updated successfully", storeId = StoreData.Id });
+        // }
 
         [HttpGet("{cryptoCode}/walletsend")]
         public async Task<IActionResult> WalletSend(
@@ -426,25 +479,54 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             string? defaultDestination = null, string? defaultAmount = null, string[]? bip21 = null,
             [FromQuery] string? returnUrl = null)
         {
+            NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
+
+            if (config.Wallet == null)
+            {
+                TempData[WellKnownTempData.ErrorMessage] = $"Please create a wallet first.";
+                return Redirect("/");
+            }
+
+            var store = await _StoreRepository.FindStore(storeId);
+
+            var rule = store.GetStoreBlob().GetRateRules(_defaultRules)?.GetRuleFor(new Rating.CurrencyPair(cryptoCode, "USD"));
+
+            var bid = rule is null ? null : (await _rateFetcher.FetchRate(rule, new StoreIdRateContext(storeId), HttpContext.RequestAborted)).BidAsk?.Bid;
+
+            decimal rate = 0;
+
+            if (bid is decimal b)
+            {
+                rate = b;
+            }
+
+            // TODO: Change to account after generating new wallet.
+            var account = config.PublicAddress;
+
+            var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
+                "account_info", new AccountInfoRequest { Account = account });
+
+            var balance = RawToNanoString(info.Balance);
+
             var vm = new NanoWalletSendModel
             {
                 CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
-                CurrentBalance = 1234,
+                CurrentBalance = balance,
                 CryptoDivisibility = 6,
                 FiatDivisibility = 2,
                 Fiat = "USD",
-                Rate = 7.25m, // mock FX rate
+                Rate = rate,
                 Outputs = new List<NanoWalletSendModel.TransactionOutput>
             {
                 new NanoWalletSendModel.TransactionOutput
                 {
-                    DestinationAddress = "nano_3mockaddress1exampleexampleexampleexampleexample1",
-                    Amount = 1.234m,
-                    PayoutId = "mock-payout-001",
-                    Labels = new[] { "demo", "test" }
+                    DestinationAddress = defaultDestination,
+                    Amount = defaultAmount,
+                    // PayoutId = "mock-payout-001",
+                    // Labels = new[] { "demo", "test" }
                 }
             },
-                BackUrl = Url.Action(nameof(GetStoreNanoLikePaymentMethod), new
+                BackUrl = Url.Action(nameof(WalletTransaction), new
                 {
                     storeId,
                     cryptoCode
@@ -456,68 +538,161 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             return View("/Views/Nano/NanoWalletSend.cshtml", vm);
         }
 
-        [HttpGet("{cryptoCode}/walletreceive")]
-        public IActionResult WalletReceive(string storeId, string cryptoCode)
+        [HttpPost("{cryptoCode}/walletsend")]
+        public async Task<IActionResult> WalletSend(
+            // [ModelBinder(typeof(WalletIdModelBinder))] WalletId walletId,
+            string cryptoCode, string storeId,
+            NanoWalletSendModel model)
         {
-            // Your view reads Context.GetRouteValue("walletId").ToString();
-            // Ensure it's present to avoid a null.ToString() crash.
-            // if (!RouteData.Values.ContainsKey("walletId"))
-            //     RouteData.Values["walletId"] = "mockwallet";
+            NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
 
-            var vm = new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel
+            if (config.Wallet == null)
             {
-                CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
-                Address = null,      // null => shows the "Generate..." button
-                PaymentLink = null,
-                // Leave ReturnUrl null; your view computes it via Url.Action(...)
-                CryptoImage = Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png") // optional; remove if not available
-            };
-
-            // If your view file name is WalletReceive.cshtml under Views/UINanoLikeStore, this is fine:
-            // return View(vm);
-            // Otherwise: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
-            return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
-
-        }
-
-        [HttpPost("{cryptoCode}/walletreceive")]
-        [ValidateAntiForgeryToken]
-        public IActionResult WalletReceive(string storeId, string cryptoCode, [FromForm] string command, [FromForm] NanoWalletReceiveViewModel vm)
-        {
-            // if (!RouteData.Values.ContainsKey("walletId"))
-            //     RouteData.Values["walletId"] = "mockwallet";
-            vm ??= new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel();
-            vm.CryptoCode = string.IsNullOrWhiteSpace(vm.CryptoCode)
-                ? (string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant())
-                : vm.CryptoCode;
-
-            vm.CryptoImage ??= Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png"); // optional
-
-            if (string.Equals(command, "generate-new-address", StringComparison.OrdinalIgnoreCase))
-            {
-                // Mock address and link
-                var mockAddress = "nano_3mockaddress1x9o7e9q7wz4y7p6r5s4t3u2v1w0x9y8z7a6b5c4d3e2f1";
-                vm.Address = mockAddress;
-                vm.PaymentLink = $"{vm.CryptoCode.ToLowerInvariant()}:{mockAddress}";
+                TempData[WellKnownTempData.ErrorMessage] = $"Please create a wallet first.";
+                return Redirect("/");
             }
 
-            // return View(vm);
-            // Or: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
-            return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
+            string source = config.Account;
+            string destination = model.Outputs[0].DestinationAddress;
+            string amount = model.Outputs[0].Amount;
+            Guid id = Guid.NewGuid();
+            string wallet = config.Wallet;
+
+            decimal decimalAmount = Convert.ToDecimal(amount);
+            string rawAmount = XnoToRawString(decimalAmount);
+
+            try
+            {
+                var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<WalletSendRequest, WalletSendResponse>("send", new WalletSendRequest
+                {
+                    Wallet = wallet,
+                    Source = source,
+                    Destination = destination,
+                    Amount = rawAmount,
+                    Id = id.ToString()
+                });
+
+                string message = "Successfully Sent " + amount + " to " + destination;
+
+                TempData[WellKnownTempData.SuccessMessage] = message;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+
+                TempData[WellKnownTempData.ErrorMessage] = "Send Failed. Try again in sometime";
+            }
+
+            return Redirect("/");
         }
+        // TODO: Remove this and refactor the one in nano payment link extension. 
+        private static string XnoToRawString(decimal xno)
+        {
+            // Up to 30 fractional digits; truncate beyond that (don’t round up).
+            var s = xno.ToString("0.##############################", CultureInfo.InvariantCulture);
+            var parts = s.Split('.');
+            var intPart = parts[0].TrimStart('+');
+            var fracPart = parts.Length > 1 ? parts[1] : string.Empty;
+
+            if (fracPart.Length > 30)
+                fracPart = fracPart.Substring(0, 30);
+
+            var combined = (intPart + fracPart.PadRight(30, '0')).TrimStart('0');
+            return string.IsNullOrEmpty(combined) ? "0" : combined;
+        }
+
+        // TODO: Remove this and refactor the one in nano blockchain listener. 
+        private static string RawToNanoString(string rawStr)
+        {
+            if (string.IsNullOrWhiteSpace(rawStr))
+                return "0";
+            if (!BigInteger.TryParse(rawStr, out var raw))
+                return "0";
+
+            var unit = BigInteger.Pow(10, 30); // 1 NANO = 10^30 raw
+            var integer = BigInteger.DivRem(raw, unit, out var remainder);
+
+            if (remainder.IsZero)
+                return integer.ToString();
+
+            var frac = remainder.ToString().PadLeft(30, '0').TrimEnd('0');
+            return $"{integer}.{frac}";
+        }
+
+        // Not fully implemented since it was not deemed necessary for v1
+
+        // [HttpGet("{cryptoCode}/walletreceive")]
+        // public IActionResult WalletReceive(string storeId, string cryptoCode)
+        // {
+
+        //     // Your view reads Context.GetRouteValue("walletId").ToString();
+        //     // Ensure it's present to avoid a null.ToString() crash.
+        //     // if (!RouteData.Values.ContainsKey("walletId"))
+        //     //     RouteData.Values["walletId"] = "mockwallet";
+
+        //     var vm = new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel
+        //     {
+        //         CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
+        //         Address = null,      // null => shows the "Generate..." button
+        //         PaymentLink = null,
+        //         // Leave ReturnUrl null; your view computes it via Url.Action(...)
+        //         CryptoImage = Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png") // optional; remove if not available
+        //     };
+
+        //     // If your view file name is WalletReceive.cshtml under Views/UINanoLikeStore, this is fine:
+        //     // return View(vm);
+        //     // Otherwise: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
+        //     return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
+
+        // }
+
+        // Maybe implement receive in the future
+
+        // [HttpPost("{cryptoCode}/walletreceive")]
+        // [ValidateAntiForgeryToken]
+        // public IActionResult WalletReceive(string storeId, string cryptoCode, [FromForm] string command, [FromForm] NanoWalletReceiveViewModel vm)
+        // {
+        //     // if (!RouteData.Values.ContainsKey("walletId"))
+        //     //     RouteData.Values["walletId"] = "mockwallet";
+        //     vm ??= new BTCPayServer.Plugins.Nano.ViewModels.NanoWalletReceiveViewModel();
+        //     vm.CryptoCode = string.IsNullOrWhiteSpace(vm.CryptoCode)
+        //         ? (string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant())
+        //         : vm.CryptoCode;
+
+        //     vm.CryptoImage ??= Url.Content("/_content/BTCPayServer.Plugins.Nano/resources/img/screengrab.png"); // optional
+
+        //     if (string.Equals(command, "generate-new-address", StringComparison.OrdinalIgnoreCase))
+        //     {
+        //         // Mock address and link
+        //         var mockAddress = "nano_3mockaddress1x9o7e9q7wz4y7p6r5s4t3u2v1w0x9y8z7a6b5c4d3e2f1";
+        //         vm.Address = mockAddress;
+        //         vm.PaymentLink = $"{vm.CryptoCode.ToLowerInvariant()}:{mockAddress}";
+        //     }
+
+        //     // return View(vm);
+        //     // Or: return View("~/Views/Nano/NanoWalletReceive.cshtml", vm);
+        //     return View("/Views/Nano/NanoWalletReceive.cshtml", vm);
+        // }
 
         [HttpGet("{cryptoCode}/walletsettings")]
         public async Task<IActionResult> WalletSettings(string storeId, string cryptoCode)
         {
             bool enabled = false;
-            string address = "";
+            string account = "";
 
             try
             {
                 NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
 
+                if (config.Wallet == null)
+                {
+                    TempData[WellKnownTempData.ErrorMessage] = $"Please create a wallet first.";
+                    return Redirect("/");
+                }
+
                 enabled = config.Enabled;
-                address = config.PublicAddress;
+                account = config.Account;
+
             }
             catch (Exception e)
             {
@@ -543,7 +718,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 // NBXSeedAvailable = false,
 
                 Label = $"{code} Wallet",
-                PublicAddress = address
+                Account = account
                 // DerivationScheme = $"{code}_MOCK_DERIVATION",
                 // DerivationSchemeInput = null
             };
@@ -592,11 +767,12 @@ namespace BTCPayServer.Plugins.Nano.Controllers
         public async Task<IActionResult> ConfirmDeleteWallet(string storeId, string cryptoCode)
         {
             NanoLikePaymentMethodConfiguration config = await getPaymentConfig(storeId, cryptoCode);
-            Console.WriteLine("HERE");
-            Console.WriteLine(storeId);
-            Console.WriteLine(config.Wallet);
-            Console.WriteLine(config.Enabled);
-            if (config.Wallet == null) return Redirect("/");
+
+            if (config.Wallet == null)
+            {
+                TempData[WellKnownTempData.ErrorMessage] = $"There is no wallet to delete.";
+                return Redirect("/");
+            }
 
             await setPaymentConfig(storeId, cryptoCode, new NanoLikePaymentMethodConfiguration
             {
@@ -642,13 +818,19 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                     Wallet = wallet
                 });
 
-                string address = accountResponse.Account;
+                string account = accountResponse.Account;
+
+                AccountKeyResponse keyResponse = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountKeyRequest, AccountKeyResponse>("account_key", new AccountKeyRequest
+                {
+                    Account = account
+                });
 
                 NanoLikePaymentMethodConfiguration newConfig = new NanoLikePaymentMethodConfiguration
                 {
                     Enabled = true,
                     Wallet = wallet,
-                    PublicAddress = address
+                    Account = account,
+                    PublicAddress = keyResponse.Key
                 };
 
                 await setPaymentConfig(storeId, cryptoCode, newConfig);
@@ -713,7 +895,6 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
             if (newConfig == null)
             {
-                Console.WriteLine("HERE SETTING CONFIG TO NULL");
                 store.SetPaymentMethodConfig(pmi, null);
                 return;
             }
@@ -778,10 +959,10 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             public bool SupportWalletExport { get; set; }
             public string CryptoCode { get; set; }
             public string NewAccountLabel { get; set; }
-            public long AccountIndex { get; set; }
+            public string AddressId { get; set; }
             public bool Enabled { get; set; }
 
-            public IEnumerable<SelectListItem> Accounts { get; set; }
+            // public IEnumerable<SelectListItem> Accounts { get; set; }
             public bool WalletFileFound { get; set; }
             [Display(Name = "View-Only Wallet File")]
             public IFormFile WalletFile { get; set; }

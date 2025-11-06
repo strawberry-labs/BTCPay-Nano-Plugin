@@ -14,7 +14,7 @@
     var storeId = (string)Context.GetRouteValue("storeId");
     var cryptoCode = Model.CryptoCode;
     @* var walletId = Context.GetRouteValue("walletId").ToString(); *@
-    var returnUrl = Model.ReturnUrl ?? Url.Action(nameof(UINanoLikeStore.GetStoreNanoLikePaymentMethod), new
+    var returnUrl = Model.ReturnUrl ?? Url.Action(nameof(UINanoLikeStore.WalletTransaction), new
     {
         storeId,
         cryptoCode

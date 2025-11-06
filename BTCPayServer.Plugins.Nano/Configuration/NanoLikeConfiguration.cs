@@ -11,6 +11,6 @@ namespace BTCPayServer.Plugins.Nano.Configuration
     public class NanoLikeConfigurationItem
     {
         public Uri RpcUri { get; set; }
-
+        public Uri WebsocketUri { get; set; }
     }
 }

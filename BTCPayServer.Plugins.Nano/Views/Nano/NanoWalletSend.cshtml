@@ -10,7 +10,7 @@
 @{
     var storeId = (string)Context.GetRouteValue("storeId");
     var cryptoCode = Model.CryptoCode;
-    Model.ReturnUrl ??= Url.Action(nameof(UINanoLikeStore.GetStoreNanoLikePaymentMethod), new
+    Model.ReturnUrl ??= Url.Action(nameof(UINanoLikeStore.WalletTransaction), new
     {
         storeId,
         cryptoCode
@@ -92,7 +92,7 @@
     <div class="list-group list-group-flush">
         @for (var index = 0; index < Model.Outputs.Count; index++)
         {
-            <input type="hidden" asp-for="Outputs[index].PayoutId" />
+            @* <input type="hidden" asp-for="Outputs[index].PayoutId" /> *@
             <div class="list-group-item d-block px-0 pt-0 pb-3 mb-3">
                 <div class="form-group">
                     <div class="d-flex align-items-center justify-content-between">
@@ -117,7 +117,7 @@
                     </div>
                     <span asp-validation-for="Outputs[index].DestinationAddress" class="text-danger"></span>
                 </div>
-                <div class="form-group">
+                @* <div class="form-group">
                     <label class="form-label" text-translate="true">Labels</label>
                     <select asp-for="Outputs[index].Labels" class="d-none">
                         @foreach (var t in Model.Outputs[index].Labels)
@@ -126,9 +126,9 @@
                         }
                     </select>
                     <vc:label-manager selected-labels="Model.Outputs[index].Labels" exclude-types="true"
-                        select-element="Outputs_@(index)__Labels" @* wallet-object-id="new WalletObjectId(WalletId.Parse(walletId), WalletObjectData.Types.Address, Model.Outputs[index].DestinationAddress)" *@
+                        select-element="Outputs_@(index)__Labels" wallet-object-id="new WalletObjectId(WalletId.Parse(walletId), WalletObjectData.Types.Address, Model.Outputs[index].DestinationAddress)"
                      auto-update="false" />
-                </div>
+                </div> *@
                 <div class="form-group">
                     <label asp-for="Outputs[index].Amount" class="form-label"></label>
                     <div class="input-group">
