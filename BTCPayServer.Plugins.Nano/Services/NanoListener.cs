@@ -41,7 +41,7 @@ namespace BTCPayServer.Plugins.Nano.Services
         private readonly PaymentService _paymentService;
         private readonly NanoAdhocAddressService _nanoAdhocAddressService;
         private readonly NanoBlockchainListenerHostedService _nanoBlockchainListenerHostedService;
-        private readonly IBackgroundTaskQueue _paymentsTaskQueue;
+        // private readonly IBackgroundTaskQueue _paymentsTaskQueue;
 
         public NanoListener(
             InvoiceRepository invoiceRepository,
@@ -55,7 +55,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             NanoAdhocAddressService nanoAdhocAddressService,
             NanoLikePaymentConfigService nanoLikePaymentConfigService,
             NanoBlockchainListenerHostedService nanoBlockchainListenerHostedService,
-            IBackgroundTaskQueue paymentsTaskQueue,
+            // IBackgroundTaskQueue paymentsTaskQueue,
             PaymentService paymentService) : base(eventAggregator, logger)
         {
             _invoiceRepository = invoiceRepository;
@@ -70,7 +70,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             _nanoAdhocAddressService = nanoAdhocAddressService;
             _nanoLikePaymentConfigService = nanoLikePaymentConfigService;
             _nanoBlockchainListenerHostedService = nanoBlockchainListenerHostedService;
-            _paymentsTaskQueue = paymentsTaskQueue;
+            // _paymentsTaskQueue = paymentsTaskQueue;
         }
 
         protected override void SubscribeToEvents()
