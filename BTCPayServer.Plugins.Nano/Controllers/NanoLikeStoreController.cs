@@ -545,7 +545,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             {
                 TempData[WellKnownTempData.ErrorMessage] = $"Unexpected Error. Please try again in sometime.";
                 Console.WriteLine(ex);
-                Redirect('/');
+                return Redirect("/");
             }
         }
 
