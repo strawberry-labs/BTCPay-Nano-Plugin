@@ -63,6 +63,7 @@ namespace BTCPayServer.Plugins.Nano.RPC
             if (!string.IsNullOrEmpty(error))
             {
                 Console.WriteLine("throwing json api exception");
+                Console.WriteLine(error);
                 throw new JsonRpcApiException(error);
             }
 

@@ -505,20 +505,22 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             // var account = config.PublicAddress;
             var account = config.Account;
 
-            var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
+            try
+            {
+                var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
                 "account_info", new AccountInfoRequest { Account = account });
 
-            var balance = RawToNanoString(info.Balance);
+                var balance = RawToNanoString(info.Balance);
 
-            var vm = new NanoWalletSendModel
-            {
-                CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
-                CurrentBalance = balance,
-                CryptoDivisibility = 6,
-                FiatDivisibility = 2,
-                Fiat = "USD",
-                Rate = rate,
-                Outputs = new List<NanoWalletSendModel.TransactionOutput>
+                var vm = new NanoWalletSendModel
+                {
+                    CryptoCode = string.IsNullOrWhiteSpace(cryptoCode) ? "XNO" : cryptoCode.ToUpperInvariant(),
+                    CurrentBalance = balance,
+                    CryptoDivisibility = 6,
+                    FiatDivisibility = 2,
+                    Fiat = "USD",
+                    Rate = rate,
+                    Outputs = new List<NanoWalletSendModel.TransactionOutput>
             {
                 new NanoWalletSendModel.TransactionOutput
                 {
@@ -528,16 +530,23 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                     // Labels = new[] { "demo", "test" }
                 }
             },
-                BackUrl = Url.Action(nameof(WalletTransaction), new
-                {
-                    storeId,
-                    cryptoCode
-                }),
-                // ReturnUrl = Url.Action(nameof(WalletSend), new { storeId, cryptoCode })
-            };
+                    BackUrl = Url.Action(nameof(WalletTransaction), new
+                    {
+                        storeId,
+                        cryptoCode
+                    }),
+                    // ReturnUrl = Url.Action(nameof(WalletSend), new { storeId, cryptoCode })
+                };
 
 
-            return View("/Views/Nano/NanoWalletSend.cshtml", vm);
+                return View("/Views/Nano/NanoWalletSend.cshtml", vm);
+            }
+            catch (Exception ex)
+            {
+                TempData[WellKnownTempData.ErrorMessage] = $"Unexpected Error. Please try again in sometime.";
+                Console.WriteLine(ex);
+                Redirect('/');
+            }
         }
 
         [HttpPost("{cryptoCode}/walletsend")]
@@ -555,6 +564,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             }
 
             string source = config.Account;
+            // string source = config.PublicAddress;
             string destination = model.Outputs[0].DestinationAddress;
             string amount = model.Outputs[0].Amount;
             Guid id = Guid.NewGuid();
