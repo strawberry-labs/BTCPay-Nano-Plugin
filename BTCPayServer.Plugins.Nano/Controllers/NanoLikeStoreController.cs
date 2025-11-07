@@ -594,7 +594,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             {
                 Console.WriteLine(ex);
 
-                TempData[WellKnownTempData.ErrorMessage] = "Send Failed. Try again in sometime";
+                TempData[WellKnownTempData.ErrorMessage] = "Send Failed. Try again in sometime. If it is a new wallet, you'll need to receive nano first before being able to send.";
             }
 
             return Redirect("/");
