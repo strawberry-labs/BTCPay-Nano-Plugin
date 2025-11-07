@@ -505,6 +505,8 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             // var account = config.PublicAddress;
             var account = config.Account;
 
+            Console.WriteLine(config.Wallet);
+
             try
             {
                 var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
