@@ -150,11 +150,9 @@ namespace BTCPayServer.Plugins.Nano.Services
             {
                 // If already connected, send an update
                 Console.WriteLine("Updating WS Connection " + newAccount);
-                // _ = TrySendUpdateAsync(accountsAdd: new[] { newAccount }, accountsDel: null);
-                string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
-                Console.WriteLine("Updating websocket addresses");
-                Console.WriteLine(addresses[0] + " " + addresses[1]);
-                _ = TrySendUpdateAsync(accountsList: addresses);
+                _ = TrySendUpdateAsync(accountsAdd: new[] { newAccount }, accountsDel: null);
+                // string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
+                // _ = TrySendUpdateAsync(accountsList: addresses);
             }
 
             return true;
@@ -201,11 +199,9 @@ namespace BTCPayServer.Plugins.Nano.Services
             else
             {
                 // If still connected, send an update
-                // _ = TrySendUpdateAsync(accountsAdd: null, accountsDel: new[] { address.Address });
-                string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
-                Console.WriteLine("Updating websocket addresses");
-                Console.WriteLine(addresses[0]);
-                _ = TrySendUpdateAsync(accountsList: addresses);
+                _ = TrySendUpdateAsync(accountsAdd: null, accountsDel: new[] { address.Address });
+                // string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
+                // _ = TrySendUpdateAsync(accountsList: addresses);
             }
 
             return true;
@@ -657,17 +653,18 @@ namespace BTCPayServer.Plugins.Nano.Services
             }
         }
 
-        private async Task TrySendUpdateAsync(string[] accountsList, string[] accountsAdd = null, string[] accountsDel = null)
+        private async Task TrySendUpdateAsync(string[] accountsAdd = null, string[] accountsDel = null)
         {
             // TODO: Update code after testing the final deployment setup. Current code runs based on the Joohanssen proxy's settings for websocket update
             Console.WriteLine(1);
-            Console.WriteLine(accountsList.Length);
+            // Console.WriteLine(accountsList.Length);
             // Nothing to send
-            // var addEmpty = accountsAdd == null || accountsAdd.Length == 0;
-            // var delEmpty = accountsDel == null || accountsDel.Length == 0;
-            // if (addEmpty && delEmpty)
-            if (accountsList.Length == 0)
+            var addEmpty = accountsAdd == null || accountsAdd.Length == 0;
+            var delEmpty = accountsDel == null || accountsDel.Length == 0;
+            if (addEmpty && delEmpty)
                 return;
+            // if (accountsList.Length == 0)
+
 
             Console.WriteLine(2);
             var ws = _currentWebSocket;
@@ -681,9 +678,9 @@ namespace BTCPayServer.Plugins.Nano.Services
                 ack = "true",
                 options = new UpdateOptions
                 {
-                    // accounts_add = addEmpty ? null : accountsAdd,
-                    // accounts_del = delEmpty ? null : accountsDel
-                    accounts = accountsList
+                    accounts_add = addEmpty ? null : accountsAdd,
+                    accounts_del = delEmpty ? null : accountsDel
+                    // accounts = accountsList
                 }
             };
 
@@ -848,9 +845,9 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private sealed class UpdateOptions
         {
-            // public string[] accounts_add { get; set; }
-            // public string[] accounts_del { get; set; }
-            public string[] accounts { get; set; }
+            public string[] accounts_add { get; set; }
+            public string[] accounts_del { get; set; }
+            // public string[] accounts { get; set; }
         }
 
         public sealed class AdhocAddressByAddressComparer : IEqualityComparer<AdhocAddress>
