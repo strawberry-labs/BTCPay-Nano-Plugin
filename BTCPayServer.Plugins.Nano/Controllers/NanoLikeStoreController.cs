@@ -203,6 +203,8 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 // var account = nanoCfg.PublicAddress;
                 var account = nanoCfg.Account;
 
+                Console.WriteLine(nanoCfg.Wallet);
+
                 var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
                     "account_info", new AccountInfoRequest { Account = account });
 
