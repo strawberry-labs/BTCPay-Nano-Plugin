@@ -125,6 +125,19 @@ namespace BTCPayServer.Plugins.Nano.Services
             var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(network.CryptoCode);
             var handler = (NanoLikePaymentMethodHandler)_handlers[pmi];
 
+            var a1 = await _nanoAdhocAddressService.GetPrivateAddress("nano_1kw4xscmnj9e7ocdywhwadbeuhq1cz1hzz6d8afc4cjjsmp1uym91yi3xken", ct);
+            var a2 = await _nanoAdhocAddressService.GetPrivateAddress("nano_3ygtaeqe6bkickfay1ozeft9ng1xiyk1q3ib4uxwidbcthz3y63riwju5b8c", ct);
+            var a3 = await _nanoAdhocAddressService.GetPrivateAddress("nano_1kfd16fs634mxp1nfuxrukndxckjr8kmyzbcjkihz4hxfkugo8sxdy7tf4j6", ct);
+            var a4 = await _nanoAdhocAddressService.GetPrivateAddress("nano_3e6xpe67uq4eme3crqb9ygkj3u6megwnwaot97d73ra1x4z99zm868z95epk", ct);
+            var a5 = await _nanoAdhocAddressService.GetPrivateAddress("nano_1my7n3jpszpmyue85g5rpmk5d847s38a61d7ychnab18zjrs7oyfnsgyyqwk", ct);
+
+            Console.WriteLine("PrivateKeys");
+            Console.WriteLine(a1);
+            Console.WriteLine(a2);
+            Console.WriteLine(a3);
+            Console.WriteLine(a4);
+            Console.WriteLine(a5);
+
             switch (e.Kind)
             {
                 case NanoEventKind.SendToAdhocConfirmed:
