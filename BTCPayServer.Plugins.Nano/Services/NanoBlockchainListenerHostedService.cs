@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 using BTCPayServer.Logging;
 using BTCPayServer.Plugins.Nano.Configuration;
@@ -18,6 +19,8 @@ using System.Numerics;
 using BTCPayServer.Events;
 using BTCPayServer.Plugins.Nano.RPC;
 using BTCPayServer.Plugins.Nano.RPC.Models;
+using BTCPayServer.Services.Stores;
+using BTCPayServer.Payments;
 
 namespace BTCPayServer.Plugins.Nano.Services
 {
@@ -28,10 +31,13 @@ namespace BTCPayServer.Plugins.Nano.Services
         private readonly NanoLikePaymentConfigService _nanoLikePaymentConfigService;
         private readonly EventAggregator _eventAggregator;
         private readonly Uri _confirmationsWebSocketUri;
+        private readonly StoreRepository _storeRepository;
         // Address list + pollers
         private readonly object _addressesLock = new();
         private readonly List<AdhocAddress> _addresses = new();
         private readonly Dictionary<(string CryptoCode, string Address), CancellationTokenSource> _pollers = new();
+
+        private readonly Dictionary<string, CancellationTokenSource> _walletReceivePollCts = new();
 
         // WS state
         private readonly object _wsStateLock = new();
@@ -55,12 +61,14 @@ namespace BTCPayServer.Plugins.Nano.Services
             NanoLikeConfiguration nanoLikeConfiguration,
             NanoLikePaymentConfigService nanoLikePaymentConfigService,
             EventAggregator eventAggregator,
+            StoreRepository storeRepository,
             Logs logs)
         {
             _NanoRpcProvider = nanoRpcProvider;
             _nanoLikeConfiguration = nanoLikeConfiguration;
             _nanoLikePaymentConfigService = nanoLikePaymentConfigService;
             _eventAggregator = eventAggregator;
+            _storeRepository = storeRepository;
             Logs = logs;
 
             _confirmationsWebSocketUri = new Uri(
@@ -78,6 +86,22 @@ namespace BTCPayServer.Plugins.Nano.Services
             // Only start WS if we already have addresses
             if (SnapshotAddresses().Length > 0)
                 EnsureWebSocketRunningIfNeeded();
+
+            var stores = await _storeRepository.GetStores();
+            var pmi = PaymentTypes.CHAIN.GetPaymentMethodId("XNO");
+
+            foreach (var storeData in stores) 
+            {
+                var storeId = storeData.Id;
+                var cfg = await _nanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+
+                if (cfg.Wallet != null) {
+                    StartPollingWalletReceiveForStore(storeData.Id);
+                } else {
+                    continue;
+                }
+            }
+                
 
             // return Task.CompletedTask;
         }
@@ -98,6 +122,9 @@ namespace BTCPayServer.Plugins.Nano.Services
                         cts.Cancel();
                 }
 
+                foreach (var walletCts in _walletReceivePollCts.Values)
+                    walletCts.Cancel();
+
                 if (_runningTasks.Count > 0)
                     await Task.WhenAll(_runningTasks).ConfigureAwait(false);
             }
@@ -105,7 +132,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             finally
             {
                 _Cts?.Dispose();
-                _currentWebSocket?.Dispose();
+
             }
         }
 
@@ -717,6 +744,50 @@ namespace BTCPayServer.Plugins.Nano.Services
         }
 
         // Manual polling failsafe
+
+        // All this wallet polling is only for pippin
+        private void StartPollingWalletReceiveForStore(string storeId) {
+            var key = (storeId);
+            if (_walletReceivePollCts.ContainsKey(key))
+                return;
+
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_Cts.Token);
+
+            _walletReceivePollCts[key] = linkedCts;
+
+            // call pollwalletreceive
+            var task = PollWalletReceive(linkedCts.Token, storeId);
+            _runningTasks.Add(task);
+        }
+
+        private async Task PollWalletReceive(CancellationToken ct, string storeId) {
+            var delay = TimeSpan.FromMinutes(2);
+            Logs.PayServer.LogInformation("Starting wallet receive poll loop for storeId - " + storeId);
+
+            while (!ct.IsCancellationRequested)
+            {
+                try {
+                    var config = await _nanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+                    var walletId = config.Wallet;
+
+                    var response = await _NanoRpcProvider.RpcClients["XNO"].SendCommandAsync<ReceiveAllRequest, ReceiveAllResponse>("receive_all", new ReceiveAllRequest { Wallet=walletId });
+
+                } catch (Exception ex) {
+                    Console.WriteLine(ex);
+                }
+
+                try
+                {
+                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
+
+            Logs.PayServer.LogInformation("Stopped wallet receive poll loop for storeId - " + storeId);
+        }
 
         private void StartPollingForAddress(AdhocAddress address)
         {

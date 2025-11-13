@@ -36,8 +36,6 @@ public class NanoAdhocAddressService
         string pubKey = newAccount.Public;
         string account = newAccount.Account;
 
-        Console.WriteLine("PRINTING PRIV KEY AND ACCOUNT - ", account, " - ", privKey);
-
         var encryptedPrivKey = EncryptHex(privKey);
 
         // Save it in db with invoiceId and storeId
