@@ -38,6 +38,7 @@ namespace BTCPayServer.Plugins.Nano.Services
         private readonly Dictionary<(string CryptoCode, string Address), CancellationTokenSource> _pollers = new();
 
         private readonly Dictionary<string, CancellationTokenSource> _walletReceivePollCts = new();
+        private readonly CancellationTokenSource _storePollingCts;
 
         // WS state
         private readonly object _wsStateLock = new();
@@ -101,7 +102,8 @@ namespace BTCPayServer.Plugins.Nano.Services
                     continue;
                 }
             }
-                
+
+            StartPollingWalletReceiveForNewStore();   
 
             // return Task.CompletedTask;
         }
@@ -125,6 +127,8 @@ namespace BTCPayServer.Plugins.Nano.Services
                 foreach (var walletCts in _walletReceivePollCts.Values)
                     walletCts.Cancel();
 
+                _storePollingCts?.Cancel();
+
                 if (_runningTasks.Count > 0)
                     await Task.WhenAll(_runningTasks).ConfigureAwait(false);
             }
@@ -132,7 +136,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             finally
             {
                 _Cts?.Dispose();
-
+                _storePollingCts?.Dispose();
             }
         }
 
@@ -758,6 +762,41 @@ namespace BTCPayServer.Plugins.Nano.Services
             // call pollwalletreceive
             var task = PollWalletReceive(linkedCts.Token, storeId);
             _runningTasks.Add(task);
+        }
+
+        private void StartPollingWalletReceiveForNewStore() {
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_Cts.Token);
+
+            _storePollingCts = linkedCts;
+
+            var storePollTask = PollWalletReceiveForNewStore(linkedCts.Token);
+            _runningTasks.Add(storePollTask);
+        }
+
+        private async Task PollWalletReceiveForNewStore(CancellationToken ct) {
+            var delay = TimeSpan.FromMinutes(2);
+            Logs.PayServer.LogInformation("Starting Store-Check Poll for Wallet Receive");
+
+            while (!ct.IsCancellationRequested)
+            {
+                try {
+                    var storesIdsNotPolling = await _storeRepository.GetStores().Select((store) => !_walletReceivePollCts.ContainsKey(store.Id));
+
+                    foreach (var storeId in storesIdsNotPolling) 
+                    {
+                        var cfg = await _nanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+
+                        if (cfg.Wallet != null) {
+                            StartPollingWalletReceiveForStore(storeId);
+                        } else {
+                            continue;
+                        }
+                    }
+                } catch (Exception ex) {
+                    Console.WriteLine(ex);
+                }
+                
+            }
         }
 
         private async Task PollWalletReceive(CancellationToken ct, string storeId) {
