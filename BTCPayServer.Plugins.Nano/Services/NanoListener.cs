@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 using BTCPayServer.Client.Models;
 using BTCPayServer.Data;
@@ -24,27 +25,23 @@ using System.Numerics;
 using Newtonsoft.Json.Linq;
 using BTCPayServer.Plugins.Nano.RPC.Models;
 
-// TODO: Implement Parallelization
 namespace BTCPayServer.Plugins.Nano.Services
 {
     public class NanoListener : EventHostedServiceBase
     {
-        private readonly InvoiceRepository _invoiceRepository;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly EventAggregator _eventAggregator;
         private readonly NanoRPCProvider _nanoRpcProvider;
         private readonly NanoLikeConfiguration _nanoLikeConfiguration;
-        private readonly NanoLikePaymentConfigService _nanoLikePaymentConfigService;
         private readonly BTCPayNetworkProvider _networkProvider;
         private readonly ILogger<NanoListener> _logger;
         private readonly PaymentMethodHandlerDictionary _handlers;
         private readonly InvoiceActivator _invoiceActivator;
         private readonly PaymentService _paymentService;
-        private readonly NanoAdhocAddressService _nanoAdhocAddressService;
         private readonly NanoBlockchainListenerHostedService _nanoBlockchainListenerHostedService;
         // private readonly IBackgroundTaskQueue _paymentsTaskQueue;
 
         public NanoListener(
-            InvoiceRepository invoiceRepository,
             EventAggregator eventAggregator,
             NanoRPCProvider nanoRpcProvider,
             NanoLikeConfiguration nanoLikeConfiguration,
@@ -52,13 +49,11 @@ namespace BTCPayServer.Plugins.Nano.Services
             ILogger<NanoListener> logger,
             PaymentMethodHandlerDictionary handlers,
             InvoiceActivator invoiceActivator,
-            NanoAdhocAddressService nanoAdhocAddressService,
-            NanoLikePaymentConfigService nanoLikePaymentConfigService,
             NanoBlockchainListenerHostedService nanoBlockchainListenerHostedService,
+            IServiceScopeFactory scopeFactory,
             // IBackgroundTaskQueue paymentsTaskQueue,
             PaymentService paymentService) : base(eventAggregator, logger)
         {
-            _invoiceRepository = invoiceRepository;
             _eventAggregator = eventAggregator;
             _nanoRpcProvider = nanoRpcProvider;
             _nanoLikeConfiguration = nanoLikeConfiguration;
@@ -67,9 +62,8 @@ namespace BTCPayServer.Plugins.Nano.Services
             _handlers = handlers;
             _invoiceActivator = invoiceActivator;
             _paymentService = paymentService;
-            _nanoAdhocAddressService = nanoAdhocAddressService;
-            _nanoLikePaymentConfigService = nanoLikePaymentConfigService;
             _nanoBlockchainListenerHostedService = nanoBlockchainListenerHostedService;
+            _scopeFactory = scopeFactory;
             // _paymentsTaskQueue = paymentsTaskQueue;
         }
 
@@ -125,6 +119,9 @@ namespace BTCPayServer.Plugins.Nano.Services
             var pmi = PaymentTypes.CHAIN.GetPaymentMethodId(network.CryptoCode);
             var handler = (NanoLikePaymentMethodHandler)_handlers[pmi];
 
+            // using var scope = _scopeFactory.CreateScope();
+            // var scopedAdhocAddressService = scope.ServiceProvider.GetRequiredService<NanoAdhocAddressService>();
+
             switch (e.Kind)
             {
                 case NanoEventKind.SendToAdhocConfirmed:
@@ -132,7 +129,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                     try
                     {
                         var adhoc = e.ToAccount ?? e.Account;
-                        var invoiceIdOfAdhoc = await _nanoAdhocAddressService.GetInvoiceIdFromAccount(adhoc, ct);
+                        // var invoiceIdOfAdhoc = await scopedAdhocAddressService.GetInvoiceIdFromAccount(adhoc, ct);
                         if (!string.IsNullOrEmpty(adhoc))
                         {
                             Task.Run(async () =>
@@ -172,7 +169,8 @@ namespace BTCPayServer.Plugins.Nano.Services
                 // break;
 
                 case NanoEventKind.ReceiveOnAdhocConfirmed:
-                    var invoiceId = await _nanoAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
+
+                    // var invoiceId = await scopedAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
                     // Funds are now received on the adhoc account. Record/update payment, then sweep if fully paid.
                     Task.Run(async () =>
                         {
@@ -198,9 +196,14 @@ namespace BTCPayServer.Plugins.Nano.Services
         private async Task OnAdhocReceiveConfirmed(string cryptoCode, PaymentMethodId pmi, NanoLikePaymentMethodHandler handler, NanoEvent e, CancellationToken ct)
         {
             // Find the invoice by the adhoc address
-            var invoiceId = await _nanoAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
+            using var scope = _scopeFactory.CreateScope();
+            var scopedAdhocAddressService = scope.ServiceProvider.GetRequiredService<NanoAdhocAddressService>();
+            var scopedInvoiceRepository = scope.ServiceProvider.GetRequiredService<InvoiceRepository>();
+            var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
 
-            var invoice = await _invoiceRepository.GetInvoice(invoiceId);
+            var invoiceId = await scopedAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
+
+            var invoice = await scopedInvoiceRepository.GetInvoice(invoiceId);
 
             if (invoice == null)
             {
@@ -261,11 +264,11 @@ namespace BTCPayServer.Plugins.Nano.Services
             }
 
             // Re-load invoice to get updated payment calculation
-            invoice = await _invoiceRepository.GetInvoice(invoice.Id);
+            invoice = await scopedInvoiceRepository.GetInvoice(invoice.Id);
             var prompt = invoice.GetPaymentPrompt(pmi);
             var details = handler.ParsePaymentPromptDetails(prompt.Details);
 
-            var paymentConfig = await _nanoLikePaymentConfigService.getPaymentConfig(e.StoreId, cryptoCode);
+            var paymentConfig = await scopedNanoLikePaymentConfigService.getPaymentConfig(e.StoreId, cryptoCode);
 
             var walletAccount = paymentConfig.Account;
 
@@ -343,10 +346,13 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task RemoveAddressFromWSListener(InvoiceEvent evt, CancellationToken ct)
         {
+            using var scope = _scopeFactory.CreateScope();
+            var scopedAdhocAddressService = scope.ServiceProvider.GetRequiredService<NanoAdhocAddressService>();
+
             var invoice = evt.Invoice;
             var invoiceId = invoice.Id;
             var storeId = invoice.StoreId;
-            var account = await _nanoAdhocAddressService.GetAccountFromInvoiceId(invoiceId, ct);
+            var account = await scopedAdhocAddressService.GetAccountFromInvoiceId(invoiceId, ct);
 
             _nanoBlockchainListenerHostedService.RemoveAddress(new AdhocAddress
             {
@@ -362,6 +368,9 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task ReceivedPayment(InvoiceEntity invoice, PaymentEntity payment)
         {
+            using var scope = _scopeFactory.CreateScope();
+            var scopedInvoiceRepository = scope.ServiceProvider.GetRequiredService<InvoiceRepository>();
+
             _logger.LogInformation("Invoice {InvoiceId} received payment {Value} {Currency} {PaymentId}", invoice.Id, payment.Value, payment.Currency, payment.Id);
 
             var prompt = invoice.GetPaymentPrompt(payment.PaymentMethodId);
@@ -371,7 +380,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                 prompt.Calculate().Due > 0.0m)
             {
                 // await _invoiceActivator.ActivateInvoicePaymentMethod(invoice.Id, payment.PaymentMethodId, true);
-                invoice = await _invoiceRepository.GetInvoice(invoice.Id);
+                invoice = await scopedInvoiceRepository.GetInvoice(invoice.Id);
             }
 
             _eventAggregator.Publish(new InvoiceEvent(invoice, InvoiceEvent.ReceivedPayment) { Payment = payment });
@@ -394,6 +403,9 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task CreateReceiveBlockViaRpc(NanoEvent e, string cryptoCode, string account, string sourceSendHash, CancellationToken ct)
         {
+            using var scope = _scopeFactory.CreateScope();
+            var scopedAdhocAddressService = scope.ServiceProvider.GetRequiredService<NanoAdhocAddressService>();
+
             var rpc = _nanoRpcProvider.RpcClients[cryptoCode];
 
             // Get account info (to determine open vs receive and current state)
@@ -450,7 +462,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             //     throw new InvalidOperationException("work_generate failed");
 
             // Private key to sign
-            var privateKey = await _nanoAdhocAddressService.GetPrivateAddress(account, ct);
+            var privateKey = await scopedAdhocAddressService.GetPrivateAddress(account, ct);
 
             if (string.IsNullOrEmpty(privateKey))
             {
@@ -481,6 +493,10 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task<string> CreateSendBlockViaRpc(NanoEvent e, string cryptoCode, string fromAccount, string toAccount, string amountRaw, bool sweepAll, CancellationToken ct)
         {
+            using var scope = _scopeFactory.CreateScope();
+            var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
+            var scopedAdhocAddressService = scope.ServiceProvider.GetRequiredService<NanoAdhocAddressService>();
+
             var rpc = _nanoRpcProvider.RpcClients[cryptoCode];
             // From account info
             var info = await rpc.SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
@@ -494,7 +510,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             var prevBalance = info.ConfirmedBalance ?? info.Balance ?? "0";
 
             // Destination public key
-            var paymentConfig = await _nanoLikePaymentConfigService.getPaymentConfig(e.StoreId, cryptoCode);
+            var paymentConfig = await scopedNanoLikePaymentConfigService.getPaymentConfig(e.StoreId, cryptoCode);
 
             var destKey = paymentConfig.PublicAddress;
 
@@ -519,7 +535,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             //     throw new InvalidOperationException("work_generate failed");
 
             // Sign
-            var privateKey = await _nanoAdhocAddressService.GetPrivateAddress(fromAccount, ct);
+            var privateKey = await scopedAdhocAddressService.GetPrivateAddress(fromAccount, ct);
 
             if (string.IsNullOrEmpty(privateKey))
                 throw new InvalidOperationException($"No private key available for {fromAccount}");

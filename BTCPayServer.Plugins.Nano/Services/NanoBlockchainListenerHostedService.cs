@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json.Linq;
 
 using BTCPayServer.Logging;
@@ -26,19 +27,18 @@ namespace BTCPayServer.Plugins.Nano.Services
 {
     public class NanoBlockchainListenerHostedService : IHostedService
     {
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly NanoRPCProvider _NanoRpcProvider;
         private readonly NanoLikeConfiguration _nanoLikeConfiguration;
-        private readonly NanoLikePaymentConfigService _nanoLikePaymentConfigService;
         private readonly EventAggregator _eventAggregator;
         private readonly Uri _confirmationsWebSocketUri;
-        private readonly StoreRepository _storeRepository;
         // Address list + pollers
         private readonly object _addressesLock = new();
         private readonly List<AdhocAddress> _addresses = new();
         private readonly Dictionary<(string CryptoCode, string Address), CancellationTokenSource> _pollers = new();
 
         private readonly Dictionary<string, CancellationTokenSource> _walletReceivePollCts = new();
-        private readonly CancellationTokenSource _storePollingCts;
+        private CancellationTokenSource _storePollingCts;
 
         // WS state
         private readonly object _wsStateLock = new();
@@ -60,16 +60,14 @@ namespace BTCPayServer.Plugins.Nano.Services
         public NanoBlockchainListenerHostedService(
             NanoRPCProvider nanoRpcProvider,
             NanoLikeConfiguration nanoLikeConfiguration,
-            NanoLikePaymentConfigService nanoLikePaymentConfigService,
             EventAggregator eventAggregator,
-            StoreRepository storeRepository,
+            IServiceScopeFactory scopeFactory,
             Logs logs)
         {
             _NanoRpcProvider = nanoRpcProvider;
             _nanoLikeConfiguration = nanoLikeConfiguration;
-            _nanoLikePaymentConfigService = nanoLikePaymentConfigService;
             _eventAggregator = eventAggregator;
-            _storeRepository = storeRepository;
+            _scopeFactory = scopeFactory;
             Logs = logs;
 
             _confirmationsWebSocketUri = new Uri(
@@ -80,6 +78,10 @@ namespace BTCPayServer.Plugins.Nano.Services
         {
             _Cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
+            using var scope = _scopeFactory.CreateScope();
+            var scopedStoreRepository = scope.ServiceProvider.GetRequiredService<StoreRepository>();
+            var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
+
             // Start pollers for any pre-populated addresses (if any)
             foreach (var address in SnapshotAddresses())
                 StartPollingForAddress(address);
@@ -88,16 +90,16 @@ namespace BTCPayServer.Plugins.Nano.Services
             if (SnapshotAddresses().Length > 0)
                 EnsureWebSocketRunningIfNeeded();
 
-            var stores = await _storeRepository.GetStores();
+            var stores = await scopedStoreRepository.GetStores();
             var pmi = PaymentTypes.CHAIN.GetPaymentMethodId("XNO");
 
             foreach (var storeData in stores) 
             {
                 var storeId = storeData.Id;
-                var cfg = await _nanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+                var cfg = await scopedNanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
 
                 if (cfg.Wallet != null) {
-                    StartPollingWalletReceiveForStore(storeData.Id);
+                    StartPollingWalletReceiveForStore(storeId);
                 } else {
                     continue;
                 }
@@ -379,7 +381,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                             break;
 
                         var message = builder.ToString();
-                        Console.WriteLine(message);
+
                         try
                         {
                             using var doc = JsonDocument.Parse(message);
@@ -751,7 +753,7 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         // All this wallet polling is only for pippin
         private void StartPollingWalletReceiveForStore(string storeId) {
-            var key = (storeId);
+            var key = storeId;
             if (_walletReceivePollCts.ContainsKey(key))
                 return;
 
@@ -760,7 +762,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             _walletReceivePollCts[key] = linkedCts;
 
             // call pollwalletreceive
-            var task = PollWalletReceive(linkedCts.Token, storeId);
+            var task = PollWalletReceive(linkedCts.Token, key);
             _runningTasks.Add(task);
         }
 
@@ -780,11 +782,17 @@ namespace BTCPayServer.Plugins.Nano.Services
             while (!ct.IsCancellationRequested)
             {
                 try {
-                    var storesIdsNotPolling = await _storeRepository.GetStores().Select((store) => !_walletReceivePollCts.ContainsKey(store.Id));
+                    using var scope = _scopeFactory.CreateScope();
+                    var scopedStoreRepository = scope.ServiceProvider.GetRequiredService<StoreRepository>();
+                    var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
+
+                    var stores = await scopedStoreRepository.GetStores();
+
+                    var storesIdsNotPolling = stores.Select((store) => store.Id).Where((id) => !_walletReceivePollCts.ContainsKey(id));
 
                     foreach (var storeId in storesIdsNotPolling) 
                     {
-                        var cfg = await _nanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+                        var cfg = await scopedNanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
 
                         if (cfg.Wallet != null) {
                             StartPollingWalletReceiveForStore(storeId);
@@ -795,7 +803,15 @@ namespace BTCPayServer.Plugins.Nano.Services
                 } catch (Exception ex) {
                     Console.WriteLine(ex);
                 }
-                
+
+                try
+                {
+                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
 
@@ -806,7 +822,9 @@ namespace BTCPayServer.Plugins.Nano.Services
             while (!ct.IsCancellationRequested)
             {
                 try {
-                    var config = await _nanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+                    using var scope = _scopeFactory.CreateScope();
+                    var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
+                    var config = await scopedNanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
                     var walletId = config.Wallet;
 
                     var response = await _NanoRpcProvider.RpcClients["XNO"].SendCommandAsync<ReceiveAllRequest, ReceiveAllResponse>("receive_all", new ReceiveAllRequest { Wallet=walletId });

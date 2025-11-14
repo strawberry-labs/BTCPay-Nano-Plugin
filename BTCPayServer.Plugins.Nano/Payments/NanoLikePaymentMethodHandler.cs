@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 using BTCPayServer.Data;
 using BTCPayServer.Payments;
@@ -7,6 +8,7 @@ using BTCPayServer.Plugins.Nano.RPC.Models;
 using BTCPayServer.Plugins.Nano.RPC;
 using BTCPayServer.Plugins.Nano.Services;
 using BTCPayServer.Plugins.Nano.Data;
+using BTCPayServer.Plugins.Nano.Data.DTO;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -19,19 +21,19 @@ namespace BTCPayServer.Plugins.Nano.Payments
         public NanoLikeSpecificBtcPayNetwork Network => _network;
         public JsonSerializer Serializer { get; }
         private readonly NanoRPCProvider _nanoRpcProvider;
-        private readonly NanoAdhocAddressService _nanoAdhocAddressService;
         private readonly NanoBlockchainListenerHostedService _nanoBlockchainListenerHostedService;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public PaymentMethodId PaymentMethodId { get; }
 
-        public NanoLikePaymentMethodHandler(NanoLikeSpecificBtcPayNetwork network, NanoRPCProvider nanoRpcProvider, NanoAdhocAddressService nanoAdhocAddressService, NanoBlockchainListenerHostedService nanoBlockchainListenerHostedService)
+        public NanoLikePaymentMethodHandler(NanoLikeSpecificBtcPayNetwork network, NanoRPCProvider nanoRpcProvider, NanoBlockchainListenerHostedService nanoBlockchainListenerHostedService, IServiceScopeFactory scopeFactory)
         {
             PaymentMethodId = PaymentTypes.CHAIN.GetPaymentMethodId(network.CryptoCode);
             _network = network;
             Serializer = BlobSerializer.CreateSerializer().Serializer;
             _nanoRpcProvider = nanoRpcProvider;
-            _nanoAdhocAddressService = nanoAdhocAddressService;
             _nanoBlockchainListenerHostedService = nanoBlockchainListenerHostedService;
+            _scopeFactory = scopeFactory;
         }
         bool IsReady() => _nanoRpcProvider.IsConfigured(_network.CryptoCode) && _nanoRpcProvider.IsAvailable(_network.CryptoCode);
 
@@ -52,14 +54,26 @@ namespace BTCPayServer.Plugins.Nano.Payments
                         // GetFeeRate = daemonClient.SendCommandAsync<GetFeeEstimateRequest, GetFeeEstimateResponse>("get_fee_estimate", new GetFeeEstimateRequest()),
                         ReserveAddress = async s =>
                         {
-                            InvoiceAdhocAddress adhocAddress = await _nanoAdhocAddressService.PrepareAdhocAddress(invoice.Id);
+                            using var scope = _scopeFactory.CreateScope();
+                            var scopedAdhocAddressService = scope.ServiceProvider.GetRequiredService<NanoAdhocAddressService>();
+
+                            InvoiceAdhocAddress adhocAddress = await scopedAdhocAddressService.PrepareAdhocAddress(invoice.Id);
                             _nanoBlockchainListenerHostedService.AddAddress(new AdhocAddress
                             {
                                 Address = adhocAddress.account,
                                 StoreId = invoice.StoreId
                             });
 
-                            return adhocAddress;
+                            // Cannot return AdhocAddress directly as its an EF entity. DBContexts are scoped so related entities should be used within the scope only. 
+                            InvoiceAdhocAddressDto adhocAddressDto = new InvoiceAdhocAddressDto {
+                                publicAddress = adhocAddress.publicAddress,
+                                privateAddress = adhocAddress.privateAddress,
+                                account = adhocAddress.account,
+                                invoiceId = adhocAddress.invoiceId,
+                                id = adhocAddress.id
+                            };
+
+                            return adhocAddressDto;
                         },
                         // AccountIndex = supportedPaymentMethod.AccountIndex
                     };
@@ -113,7 +127,7 @@ namespace BTCPayServer.Plugins.Nano.Payments
         class Prepare
         {
             // public Task<GetFeeEstimateResponse> GetFeeRate;
-            public Func<string, Task<InvoiceAdhocAddress>> ReserveAddress;
+            public Func<string, Task<InvoiceAdhocAddressDto>> ReserveAddress;
 
             // public long AccountIndex { get; internal set; }
         }
