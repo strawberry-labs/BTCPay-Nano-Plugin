@@ -392,7 +392,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                             {
                                 Logs.PayServer.LogInformation("WS confirmation: account={Account} hash={Hash}", account.GetString(), hash.GetString());
 
-                                SendNanoEvent(root);
+                                // SendNanoEvent(root);
                             }
                             else
                             {
@@ -688,9 +688,6 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task TrySendUpdateAsync(string[] accountsAdd = null, string[] accountsDel = null)
         {
-            // TODO: Update code after testing the final deployment setup. Current code runs based on the Joohanssen proxy's settings for websocket update
-            Console.WriteLine(1);
-            // Console.WriteLine(accountsList.Length);
             // Nothing to send
             var addEmpty = accountsAdd == null || accountsAdd.Length == 0;
             var delEmpty = accountsDel == null || accountsDel.Length == 0;
@@ -698,12 +695,10 @@ namespace BTCPayServer.Plugins.Nano.Services
                 return;
             // if (accountsList.Length == 0)
 
-
-            Console.WriteLine(2);
             var ws = _currentWebSocket;
             if (ws == null || ws.State != WebSocketState.Open)
                 return;
-            Console.WriteLine(3);
+
             var payload = new UpdatePayload
             {
                 action = "update",
@@ -889,65 +884,65 @@ namespace BTCPayServer.Plugins.Nano.Services
 
             while (!ct.IsCancellationRequested)
             {
-                // try
-                // {
-                //     Console.WriteLine("POLLING FOR ADDRESS " + address.Address);
+                try
+                {
+                    Console.WriteLine("POLLING FOR ADDRESS " + address.Address);
 
-                //     var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountsReceivableRequest, AccountsReceivableResponse>(
-                //                     "accounts_receivable", new AccountsReceivableRequest { Accounts = [address.Address], Count = "1", Source = "true" });
+                    var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountsReceivableRequest, AccountsReceivableResponse>(
+                                    "accounts_receivable", new AccountsReceivableRequest { Accounts = [address.Address], Count = "1", Source = "true" });
 
-                //     if (response.Blocks != null)
-                //     {
-                //         foreach (var accountEntry in response.Blocks)
-                //         {
-                //             string account = accountEntry.Key;
-                //             var blocks = accountEntry.Value;
+                    if (response.Blocks != null)
+                    {
+                        foreach (var accountEntry in response.Blocks)
+                        {
+                            string account = accountEntry.Key;
+                            var blocks = accountEntry.Value;
 
-                //             foreach (var blockEntry in blocks)
-                //             {
-                //                 string blockHash = blockEntry.Key;
-                //                 string amount = blockEntry.Value.Amount;
-                //                 string source = blockEntry.Value.Source;
+                            foreach (var blockEntry in blocks)
+                            {
+                                string blockHash = blockEntry.Key;
+                                string amount = blockEntry.Value.Amount;
+                                string source = blockEntry.Value.Source;
 
-                //                 // Do something with the data
-                //                 // Console.WriteLine($"Account: {account}");
-                //                 // Console.WriteLine($"Block: {blockHash}");
-                //                 // Console.WriteLine($"Amount: {amount}");
-                //                 // Console.WriteLine($"Source: {source}");
-                //                 // Console.WriteLine();
+                                // Do something with the data
+                                // Console.WriteLine($"Account: {account}");
+                                // Console.WriteLine($"Block: {blockHash}");
+                                // Console.WriteLine($"Amount: {amount}");
+                                // Console.WriteLine($"Source: {source}");
+                                // Console.WriteLine();
 
-                //                 var addresses = GetAddresses();
-                //                 AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
-                //                 string storeId = adhocAddress.StoreId;
+                                var addresses = GetAddresses();
+                                AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
+                                string storeId = adhocAddress.StoreId;
 
-                //                 // External payer sent to our adhoc
-                //                 var ev = new NanoEvent
-                //                 {
-                //                     CryptoCode = cryptoCode,
-                //                     Kind = NanoEventKind.SendToAdhocConfirmed,
-                //                     Account = account,       // our adhoc account
-                //                     BlockHash = blockHash,
-                //                     AmountRaw = amount,
-                //                     FromAccount = source,
-                //                     ToAccount = account,
-                //                     StoreId = storeId
-                //                 };
+                                // External payer sent to our adhoc
+                                var ev = new NanoEvent
+                                {
+                                    CryptoCode = cryptoCode,
+                                    Kind = NanoEventKind.SendToAdhocConfirmed,
+                                    Account = account,       // our adhoc account
+                                    BlockHash = blockHash,
+                                    AmountRaw = amount,
+                                    FromAccount = source,
+                                    ToAccount = account,
+                                    StoreId = storeId
+                                };
 
-                //                 Logs.PayServer.LogInformation("Nano Polling: SendToAdhocConfirmed from {From} to {To} amount(raw)={Raw} (~{Nano} NANO) hash={Hash}",
-                //                     source, account, amount, RawToNanoString(amount), blockHash);
-                //                 _eventAggregator?.Publish(ev);
-                //             }
-                //         }
-                //     }
-                // }
-                // catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                // {
-                //     break;
-                // }
-                // catch (Exception ex)
-                // {
-                //     Logs.PayServer.LogError(ex, "Error polling confirmations for {Address}", address.Address);
-                // }
+                                Logs.PayServer.LogInformation("Nano Polling: SendToAdhocConfirmed from {From} to {To} amount(raw)={Raw} (~{Nano} NANO) hash={Hash}",
+                                    source, account, amount, RawToNanoString(amount), blockHash);
+                                _eventAggregator?.Publish(ev);
+                            }
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Logs.PayServer.LogError(ex, "Error polling confirmations for {Address}", address.Address);
+                }
 
                 try
                 {
