@@ -439,9 +439,9 @@ namespace BTCPayServer.Plugins.Nano.Services
         {
             try
             {
-                Console.WriteLine("Inside Send Nano Event")
+                Console.WriteLine("Inside Send Nano Event");
                 if (!data.TryGetProperty("message", out var msg)) {
-                    Console.WriteLine("No Message Property")
+                    Console.WriteLine("No Message Property");
                     return;
                 }
                 
@@ -495,10 +495,10 @@ namespace BTCPayServer.Plugins.Nano.Services
                 // - receive/open: receive on adhoc or (if subscribed) on store wallet
                 if (string.Equals(subtype, "send", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine("Send Block")
+                    Console.WriteLine("Send Block");
                     if (destinationIsOurs && !accountIsOurs)
                     {
-                        Console.WriteLine("Send to Adhoc Event")
+                        Console.WriteLine("Send to Adhoc Event");
                         var addresses = GetAddresses();
                         AdhocAddress adhocAddress = addresses.Where(a => a.Address == linkAsAccount).ToArray()[0];
                         string storeId = adhocAddress.StoreId;
@@ -549,10 +549,10 @@ namespace BTCPayServer.Plugins.Nano.Services
                 else if (string.Equals(subtype, "receive", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(subtype, "open", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine("Receive/Open")
+                    Console.WriteLine("Receive/Open");
                     if (accountIsOurs)
                     {
-                        Console.WriteLine("Receive On Adhoc")
+                        Console.WriteLine("Receive On Adhoc");
                         var addresses = GetAddresses();
                         AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
                         string storeId = adhocAddress.StoreId;
@@ -594,13 +594,13 @@ namespace BTCPayServer.Plugins.Nano.Services
                 else
                 {
                     // change/epoch/etc. not used
-                    Console.WriteLine("Random Event Other")
+                    Console.WriteLine("Random Event Other");
                     Logs.PayServer.LogDebug("Nano WS: Ignored subtype {Subtype} for account={Account} hash={Hash}", subtype, account, hash);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Errored")
+                Console.WriteLine("Errored");
                 Logs.PayServer.LogDebug(ex, "Failed processing Nano confirmation message");
             }
 
@@ -894,54 +894,54 @@ namespace BTCPayServer.Plugins.Nano.Services
             {
                 try
                 {
-                    // Console.WriteLine("POLLING FOR ADDRESS " + address.Address);
+                    Console.WriteLine("POLLING FOR ADDRESS " + address.Address);
 
-                    // var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountsReceivableRequest, AccountsReceivableResponse>(
-                    //                 "accounts_receivable", new AccountsReceivableRequest { Accounts = [address.Address], Count = "1", Source = "true" });
+                    var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountsReceivableRequest, AccountsReceivableResponse>(
+                                    "accounts_receivable", new AccountsReceivableRequest { Accounts = [address.Address], Count = "1", Source = "true" });
 
-                    // if (response.Blocks != null)
-                    // {
-                    //     foreach (var accountEntry in response.Blocks)
-                    //     {
-                    //         string account = accountEntry.Key;
-                    //         var blocks = accountEntry.Value;
+                    if (response.Blocks != null)
+                    {
+                        foreach (var accountEntry in response.Blocks)
+                        {
+                            string account = accountEntry.Key;
+                            var blocks = accountEntry.Value;
 
-                    //         foreach (var blockEntry in blocks)
-                    //         {
-                    //             string blockHash = blockEntry.Key;
-                    //             string amount = blockEntry.Value.Amount;
-                    //             string source = blockEntry.Value.Source;
+                            foreach (var blockEntry in blocks)
+                            {
+                                string blockHash = blockEntry.Key;
+                                string amount = blockEntry.Value.Amount;
+                                string source = blockEntry.Value.Source;
 
-                    //             // Do something with the data
-                    //             // Console.WriteLine($"Account: {account}");
-                    //             // Console.WriteLine($"Block: {blockHash}");
-                    //             // Console.WriteLine($"Amount: {amount}");
-                    //             // Console.WriteLine($"Source: {source}");
-                    //             // Console.WriteLine();
+                                // Do something with the data
+                                // Console.WriteLine($"Account: {account}");
+                                // Console.WriteLine($"Block: {blockHash}");
+                                // Console.WriteLine($"Amount: {amount}");
+                                // Console.WriteLine($"Source: {source}");
+                                // Console.WriteLine();
 
-                    //             var addresses = GetAddresses();
-                    //             AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
-                    //             string storeId = adhocAddress.StoreId;
+                                var addresses = GetAddresses();
+                                AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
+                                string storeId = adhocAddress.StoreId;
 
-                    //             // External payer sent to our adhoc
-                    //             var ev = new NanoEvent
-                    //             {
-                    //                 CryptoCode = cryptoCode,
-                    //                 Kind = NanoEventKind.SendToAdhocConfirmed,
-                    //                 Account = account,       // our adhoc account
-                    //                 BlockHash = blockHash,
-                    //                 AmountRaw = amount,
-                    //                 FromAccount = source,
-                    //                 ToAccount = account,
-                    //                 StoreId = storeId
-                    //             };
+                                // External payer sent to our adhoc
+                                var ev = new NanoEvent
+                                {
+                                    CryptoCode = cryptoCode,
+                                    Kind = NanoEventKind.SendToAdhocConfirmed,
+                                    Account = account,       // our adhoc account
+                                    BlockHash = blockHash,
+                                    AmountRaw = amount,
+                                    FromAccount = source,
+                                    ToAccount = account,
+                                    StoreId = storeId
+                                };
 
-                    //             Logs.PayServer.LogInformation("Nano Polling: SendToAdhocConfirmed from {From} to {To} amount(raw)={Raw} (~{Nano} NANO) hash={Hash}",
-                    //                 source, account, amount, RawToNanoString(amount), blockHash);
-                    //             _eventAggregator?.Publish(ev);
-                    //         }
-                    //     }
-                    // }
+                                Logs.PayServer.LogInformation("Nano Polling: SendToAdhocConfirmed from {From} to {To} amount(raw)={Raw} (~{Nano} NANO) hash={Hash}",
+                                    source, account, amount, RawToNanoString(amount), blockHash);
+                                _eventAggregator?.Publish(ev);
+                            }
+                        }
+                    }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {

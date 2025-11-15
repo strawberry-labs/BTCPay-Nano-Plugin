@@ -201,16 +201,28 @@ namespace BTCPayServer.Plugins.Nano.Services
             var scopedInvoiceRepository = scope.ServiceProvider.GetRequiredService<InvoiceRepository>();
             var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
 
-            Console.WriteLine("PRIVATE ADDRESSES")
+            Console.WriteLine("PRIVATE ADDRESSES");
             var a1 = scopedAdhocAddressService.GetPrivateAddress("nano_3mtkin6i8dtast3xg587h8k91p3zoaemnpwsogba8id8ofgu8epqmdn5bf4a", ct);
             var a2 = scopedAdhocAddressService.GetPrivateAddress("nano_1m3pxodwe13d7r6bqdu4behw9a73gogok8td53seef5f8t3xycz1zdbdk9cj", ct);
             var a3 = scopedAdhocAddressService.GetPrivateAddress("nano_1d9m13zp976shm6mfkrg5eoguu56ue5opsu4nqrkfbrjp3bjp3d9dk9cgbyz", ct);
             var a4 = scopedAdhocAddressService.GetPrivateAddress("nano_1z1u9j5fehx8p99qciqwp7ggwq3gz94jw9bqog3j81xg4ehqsg4irwqwcozz", ct);
+            var a5 = scopedAdhocAddressService.GetPrivateAddress("nano_3j3u8d5qnkkkpxsio61qbnjm655kbepymnsgcaho4dkbbhp6zfkbw154s9rj", ct);
+            var a6 = scopedAdhocAddressService.GetPrivateAddress("nano_34nd9fngbjxwo5j3jei6o8k5ybdhrokqrdfyghj5985tqwdnu88cp5ffhdqo", ct);
+            var a7 = scopedAdhocAddressService.GetPrivateAddress("nano_1s6gdt5t9kmu4pfu8f78qw511j9xmfbgdbdsns7edamrdno7req5atp3zfoj", ct);
+            var a8 = scopedAdhocAddressService.GetPrivateAddress("nano_3hybnzny1f36bpamw8mqz3bi7szm4sir3uhjrxk5utk8uqqceantuehe1z3o", ct);
+            var a9 = scopedAdhocAddressService.GetPrivateAddress("nano_34krcgrbynaax1d3ckei3y1t684b3z6uc83ku3yowznbnrrq5hsfiwurfa1d", ct);
+            var a10 = scopedAdhocAddressService.GetPrivateAddress("nano_3a14eo4go7ggjpjmtb8co637kigkb399d7pdcjtxp47b85g75wmsdyhitruu", ct);
 
-            Console.WriteLine(a1)
-            Console.WriteLine(a2)
-            Console.WriteLine(a3)
-            Console.WriteLine(a4)
+            Console.WriteLine(a1);
+            Console.WriteLine(a2);
+            Console.WriteLine(a3);
+            Console.WriteLine(a4);
+            Console.WriteLine(a5);
+            Console.WriteLine(a6);
+            Console.WriteLine(a7);
+            Console.WriteLine(a8);
+            Console.WriteLine(a9);
+            Console.WriteLine(a10);
 
             var invoiceId = await scopedAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
 
