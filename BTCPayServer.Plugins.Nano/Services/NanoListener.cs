@@ -201,6 +201,17 @@ namespace BTCPayServer.Plugins.Nano.Services
             var scopedInvoiceRepository = scope.ServiceProvider.GetRequiredService<InvoiceRepository>();
             var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
 
+            Console.WriteLine("PRIVATE ADDRESSES")
+            var a1 = scopedAdhocAddressService.GetPrivateAddress("nano_3mtkin6i8dtast3xg587h8k91p3zoaemnpwsogba8id8ofgu8epqmdn5bf4a", ct);
+            var a2 = scopedAdhocAddressService.GetPrivateAddress("nano_1m3pxodwe13d7r6bqdu4behw9a73gogok8td53seef5f8t3xycz1zdbdk9cj", ct);
+            var a3 = scopedAdhocAddressService.GetPrivateAddress("nano_1d9m13zp976shm6mfkrg5eoguu56ue5opsu4nqrkfbrjp3bjp3d9dk9cgbyz", ct);
+            var a4 = scopedAdhocAddressService.GetPrivateAddress("nano_1z1u9j5fehx8p99qciqwp7ggwq3gz94jw9bqog3j81xg4ehqsg4irwqwcozz", ct);
+
+            Console.WriteLine(a1)
+            Console.WriteLine(a2)
+            Console.WriteLine(a3)
+            Console.WriteLine(a4)
+
             var invoiceId = await scopedAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
 
             var invoice = await scopedInvoiceRepository.GetInvoice(invoiceId);
