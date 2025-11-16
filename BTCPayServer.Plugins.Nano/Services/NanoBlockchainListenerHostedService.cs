@@ -385,7 +385,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                         try
                         {
                             using var doc = JsonDocument.Parse(message);
-                            var root = doc.RootElement;
+                            var root = doc.RootElement.Clone();
                             if (root.TryGetProperty("message", out var msg) &&
                                 msg.TryGetProperty("account", out var account) &&
                                 msg.TryGetProperty("hash", out var hash))
