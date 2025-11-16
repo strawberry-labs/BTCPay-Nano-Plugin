@@ -601,6 +601,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             catch (Exception ex)
             {
                 Console.WriteLine("Errored");
+                Console.WriteLine(ex);
                 Logs.PayServer.LogDebug(ex, "Failed processing Nano confirmation message");
             }
 
