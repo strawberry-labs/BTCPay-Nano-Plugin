@@ -392,7 +392,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                             {
                                 Logs.PayServer.LogInformation("WS confirmation: account={Account} hash={Hash}", account.GetString(), hash.GetString());
 
-                                SendNanoEvent(root);
+                                _ = Task.Run(() => SendNanoEvent(root));
                             }
                             else
                             {
