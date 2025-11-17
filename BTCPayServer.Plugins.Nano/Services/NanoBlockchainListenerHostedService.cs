@@ -888,11 +888,20 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task PollConfirmationsLoopAsync(CancellationToken ct, string cryptoCode, AdhocAddress address)
         {
-            var delay = TimeSpan.FromSeconds(10);
+            var delay = TimeSpan.FromSeconds(300);
             Logs.PayServer.LogInformation("Starting confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address.Address);
 
             while (!ct.IsCancellationRequested)
             {
+                try
+                {
+                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 try
                 {
                     Console.WriteLine("POLLING FOR ADDRESS " + address.Address);
@@ -953,14 +962,6 @@ namespace BTCPayServer.Plugins.Nano.Services
                     Logs.PayServer.LogError(ex, "Error polling confirmations for {Address}", address.Address);
                 }
 
-                try
-                {
-                    await Task.Delay(delay, ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    break;
-                }
             }
 
             Logs.PayServer.LogInformation("Stopped confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address.Address);
