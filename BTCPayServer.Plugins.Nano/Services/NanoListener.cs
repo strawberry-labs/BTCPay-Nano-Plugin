@@ -428,6 +428,7 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task CreateReceiveBlockViaRpc(NanoEvent e, string cryptoCode, string account, string sourceSendHash, CancellationToken ct)
         {
+            Console.WriteLine("Inside CreateReceiveBlockViaRPC");
             using var scope = _scopeFactory.CreateScope();
             var scopedAdhocAddressService = scope.ServiceProvider.GetRequiredService<NanoAdhocAddressService>();
 
@@ -439,6 +440,7 @@ namespace BTCPayServer.Plugins.Nano.Services
 
             try
             {
+                Console.WriteLine("Getting Account info");
                 info = await rpc.SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
                 "account_info", new AccountInfoRequest { Account = account, Representative = true });
                 if (!string.IsNullOrEmpty(info?.Error))
@@ -449,6 +451,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             }
             catch (Exception ex)
             {
+                Console.WriteLine("Failed; New Account");
                 isOpened = false;
             }
 
@@ -458,7 +461,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             var representative = isOpened
             ? info.Representative
             : await ResolveRepresentativeAsync(cryptoCode, account, ct);
-
+            Console.WriteLine("Resolved Representative");
             if (string.IsNullOrEmpty(representative))
                 throw new InvalidOperationException($"No representative available for opening/receiving on {account}");
 
@@ -488,7 +491,7 @@ namespace BTCPayServer.Plugins.Nano.Services
 
             // Private key to sign
             var privateKey = await scopedAdhocAddressService.GetPrivateAddress(account, ct);
-
+            Console.WriteLine("Got Private key");
             if (string.IsNullOrEmpty(privateKey))
             {
                 throw new InvalidOperationException($"No private key available for {account}");
@@ -506,14 +509,17 @@ namespace BTCPayServer.Plugins.Nano.Services
                 // Work = work.Work,
                 JsonBlock = true
             };
+            Console.WriteLine("Created Block Request");
             var created = await rpc.SendCommandAsync<BlockCreateRequest, BlockCreateResponse>("block_create", createReq);
             if (created?.Block == null)
                 throw new InvalidOperationException("block_create (receive/open) did not return a block");
             // // Process
+            Console.WriteLine("Created Block");
             var processed = await rpc.SendCommandAsync<ProcessRequest, ProcessResponse>("process",
             new ProcessRequest { JsonBlock = true, Block = created.Block, Subtype = !isOpened ? "open" : "receive" });
             _logger.LogInformation("Processed receive/open block for {Account}. send={Source} newHash={Hash} newBalance={Bal}",
             account, sourceSendHash, processed?.Hash, newBalance);
+            Console.WriteLine("Processed Block");
         }
 
         private async Task<string> CreateSendBlockViaRpc(NanoEvent e, string cryptoCode, string fromAccount, string toAccount, string amountRaw, bool sweepAll, CancellationToken ct)
