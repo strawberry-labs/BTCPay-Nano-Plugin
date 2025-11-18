@@ -499,23 +499,24 @@ namespace BTCPayServer.Plugins.Nano.Services
             var newBalance = RawAdd(prevBalance, amountRaw);
 
             // Work root: previous (if opened) else account public key (for open)
-            // string workRoot;
-            // if (isOpened)
-            // {
-            //     workRoot = previous;
-            // }
-            // else
-            // {
-            //     var acctKey = await rpc.SendCommandAsync<AccountKeyRequest, AccountKeyResponse>(
-            //     "account_key", new AccountKeyRequest { Account = account });
-            //     workRoot = acctKey.Key;
-            // }
+            // Need this since we are using Pippin as proxy for work gen. 
+            string workRoot;
+            if (isOpened)
+            {
+                workRoot = previous;
+            }
+            else
+            {
+                var acctKey = await rpc.SendCommandAsync<AccountKeyRequest, AccountKeyResponse>(
+                "account_key", new AccountKeyRequest { Account = account });
+                workRoot = acctKey.Key;
+            }
 
-            // var work = await rpc.SendCommandAsync<WorkGenerateRequest, WorkGenerateResponse>(
-            // "work_generate", new WorkGenerateRequest { Hash = workRoot });
+            var work = await rpc.SendCommandAsync<WorkGenerateRequest, WorkGenerateResponse>(
+            "work_generate", new WorkGenerateRequest { Hash = workRoot });
 
-            // if (string.IsNullOrEmpty(work?.Work))
-            //     throw new InvalidOperationException("work_generate failed");
+            if (string.IsNullOrEmpty(work?.Work))
+                throw new InvalidOperationException("work_generate failed");
 
             // Private key to sign
             var privateKey = await scopedAdhocAddressService.GetPrivateAddress(account, ct);
@@ -534,7 +535,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                 Balance = newBalance,
                 Link = sourceSendHash, // receive uses source block hash
                 Key = privateKey,
-                // Work = work.Work,
+                Work = work.Work,
                 JsonBlock = true
             };
             Console.WriteLine("Created Block Request");
@@ -590,8 +591,11 @@ namespace BTCPayServer.Plugins.Nano.Services
 
             var newBalance = RawSub(prevBalance, sendAmountRaw);
 
-            // if (string.IsNullOrEmpty(work?.Work))
-            //     throw new InvalidOperationException("work_generate failed");
+            var work = await rpc.SendCommandAsync<WorkGenerateRequest, WorkGenerateResponse>(
+            "work_generate", new WorkGenerateRequest { Hash = previous });
+
+            if (string.IsNullOrEmpty(work?.Work))
+                throw new InvalidOperationException("work_generate failed");
 
             // Sign
             var privateKey = await scopedAdhocAddressService.GetPrivateAddress(fromAccount, ct);
@@ -608,6 +612,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                 Balance = newBalance,
                 Link = destKey, // send uses destination pubkey in link
                 Key = privateKey,
+                Work = work.Work,
                 JsonBlock = true
             };
 

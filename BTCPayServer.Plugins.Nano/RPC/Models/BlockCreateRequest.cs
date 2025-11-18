@@ -11,7 +11,7 @@ namespace BTCPayServer.Plugins.Nano.RPC.Models
         [JsonProperty("balance")] public string Balance { get; set; } // raw string
         [JsonProperty("link")] public string Link { get; set; }       // 64-hex: send -> dest pubkey, receive -> source hash
         [JsonProperty("key")] public string Key { get; set; }         // private key hex (node signs)
-        // [JsonProperty("work")] public string Work { get; set; }       // PoW for root
+        [JsonProperty("work")] public string Work { get; set; }       // PoW for root
         [JsonProperty("json_block")] public bool JsonBlock { get; set; } = true;
     }
 }
