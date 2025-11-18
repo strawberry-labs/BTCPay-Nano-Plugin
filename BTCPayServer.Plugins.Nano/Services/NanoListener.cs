@@ -201,31 +201,6 @@ namespace BTCPayServer.Plugins.Nano.Services
             var scopedInvoiceRepository = scope.ServiceProvider.GetRequiredService<InvoiceRepository>();
             var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
 
-            Console.WriteLine("PRIVATE ADDRESSES");
-            var a1 = await scopedAdhocAddressService.GetPrivateAddress("nano_3mtkin6i8dtast3xg587h8k91p3zoaemnpwsogba8id8ofgu8epqmdn5bf4a", ct);
-            var a2 = await scopedAdhocAddressService.GetPrivateAddress("nano_1m3pxodwe13d7r6bqdu4behw9a73gogok8td53seef5f8t3xycz1zdbdk9cj", ct);
-            var a3 = await scopedAdhocAddressService.GetPrivateAddress("nano_1d9m13zp976shm6mfkrg5eoguu56ue5opsu4nqrkfbrjp3bjp3d9dk9cgbyz", ct);
-            var a4 = await scopedAdhocAddressService.GetPrivateAddress("nano_1z1u9j5fehx8p99qciqwp7ggwq3gz94jw9bqog3j81xg4ehqsg4irwqwcozz", ct);
-            var a5 = await scopedAdhocAddressService.GetPrivateAddress("nano_3j3u8d5qnkkkpxsio61qbnjm655kbepymnsgcaho4dkbbhp6zfkbw154s9rj", ct);
-            var a6 = await scopedAdhocAddressService.GetPrivateAddress("nano_34nd9fngbjxwo5j3jei6o8k5ybdhrokqrdfyghj5985tqwdnu88cp5ffhdqo", ct);
-            var a7 = await scopedAdhocAddressService.GetPrivateAddress("nano_1s6gdt5t9kmu4pfu8f78qw511j9xmfbgdbdsns7edamrdno7req5atp3zfoj", ct);
-            var a8 = await scopedAdhocAddressService.GetPrivateAddress("nano_3hybnzny1f36bpamw8mqz3bi7szm4sir3uhjrxk5utk8uqqceantuehe1z3o", ct);
-            var a9 = await scopedAdhocAddressService.GetPrivateAddress("nano_34krcgrbynaax1d3ckei3y1t684b3z6uc83ku3yowznbnrrq5hsfiwurfa1d", ct);
-            var a10 = await scopedAdhocAddressService.GetPrivateAddress("nano_3a14eo4go7ggjpjmtb8co637kigkb399d7pdcjtxp47b85g75wmsdyhitruu", ct);
-            var a11 = await scopedAdhocAddressService.GetPrivateAddress("nano_3sdnytsdf549x8rjjd3peea7hmafufmjbnudenkw4dkig5jjpkwkjsn4x49x", ct);
-
-            Console.WriteLine(a1);
-            Console.WriteLine(a2);
-            Console.WriteLine(a3);
-            Console.WriteLine(a4);
-            Console.WriteLine(a5);
-            Console.WriteLine(a6);
-            Console.WriteLine(a7);
-            Console.WriteLine(a8);
-            Console.WriteLine(a9);
-            Console.WriteLine(a10);
-            Console.WriteLine(a11);
-
             var invoiceId = await scopedAdhocAddressService.GetInvoiceIdFromAccount(e.Account, ct);
 
             var invoice = await scopedInvoiceRepository.GetInvoice(invoiceId);
@@ -431,6 +406,59 @@ namespace BTCPayServer.Plugins.Nano.Services
             Console.WriteLine("Inside CreateReceiveBlockViaRPC");
             using var scope = _scopeFactory.CreateScope();
             var scopedAdhocAddressService = scope.ServiceProvider.GetRequiredService<NanoAdhocAddressService>();
+
+            Console.WriteLine("PRIVATE ADDRESSES");
+            var a1 = await scopedAdhocAddressService.GetPrivateAddress("nano_1x97jpepuswp6sginmcdb99cnsumwgmjrnc3o49cje6oea3ircrrb4tgsyc9", ct);
+            var a2 = await scopedAdhocAddressService.GetPrivateAddress("nano_13zf6eju6kwgg53y8tw8bfb6n9a6sxkerqza41c33req9hy74bt53xkfpjkx", ct);
+            var a3 = await scopedAdhocAddressService.GetPrivateAddress("nano_3htiz3mqhdhq835b5nhb8e7sfpdc8x4junx4wph3ktepnzw7kc7xh3xtwo3o", ct);
+            var a4 = await scopedAdhocAddressService.GetPrivateAddress("nano_16o3x73wcqishe8n3qfz3xroendgw3mjtwb4gyq7d4qi6459ggih9i3cuxq6", ct);
+            var a5 = await scopedAdhocAddressService.GetPrivateAddress("nano_3yca4oqfi7fwnobgkkq7ct1x5d47firzhi4axazm4f7k4yx8xa6zp78uqor3", ct);
+            var a6 = await scopedAdhocAddressService.GetPrivateAddress("nano_1bujjh8765q7yojtwk7fxgc9arj77cekhdnotwh8rr9teucxthcig7wxo481", ct);
+            var a7 = await scopedAdhocAddressService.GetPrivateAddress("nano_196dtazicocg7u5syjmqaxkgjqbmc9oqtzppcwnrt4eksrdes6pp3xem4heh", ct);
+            var a8 = await scopedAdhocAddressService.GetPrivateAddress("nano_3r5gq3d8x9b18hdkmbs8traryaziiii9h1s5ir9facr9a7dofhneujn7nkza", ct);
+            var a9 = await scopedAdhocAddressService.GetPrivateAddress("nano_3hzc3t5x993qex7a48fccx5a4ykxqoi38rd9xjfbu11okswus4dsxxhb56ri", ct);
+            var a10 = await scopedAdhocAddressService.GetPrivateAddress("nano_1zkwap3puxtqc3n3m3j8ocbn48cfomjxtqifgstyfm1bn7h5kynu8k79hi1f", ct);
+            var a11 = await scopedAdhocAddressService.GetPrivateAddress("nano_1x1mb8qn5a9jazjh6mstkydqs6rfn6pk7cp67ucfaistsegz75o6ujywswoe", ct);
+            var a12 = await scopedAdhocAddressService.GetPrivateAddress("nano_3gd7kpawuuqbg7pxnh4g5g9tdo6xnzmcxmsnn3ot9ku1suf1by7bc5hksyuc", ct);
+            var a13 = await scopedAdhocAddressService.GetPrivateAddress("nano_1695eye669nmmp6iwgfp4wbumsggqy19ho7fz7cu1fmutjor5yyq1ohaxefa", ct);
+            var a14 = await scopedAdhocAddressService.GetPrivateAddress("nano_3c57hqn73mirn8o4741bw6c9dnxmteynzzjqjk5cziaex6p5tsm98sp6wkhx", ct);
+            var a15 = await scopedAdhocAddressService.GetPrivateAddress("nano_1hjawqijm79dz7tco4uqic8oyec61skfq8u8zwtmhuejr5jr7nbayrsbsy1b", ct);
+            var a16 = await scopedAdhocAddressService.GetPrivateAddress("nano_13bf77yeragienk7gz51zgwzxji6fke5f1dsoga3us7r6x5pztesrh7t5zfj", ct);
+            var a17 = await scopedAdhocAddressService.GetPrivateAddress("nano_3wc8qxt881apbf38gj5qq7n8odso419upqqbbtwin651njh3xk73byy46a78", ct);
+            var a18 = await scopedAdhocAddressService.GetPrivateAddress("nano_3srraj4r333pjd9wmq4igcm77ui36th7nfw99wof74rn4qzdzaeoywwo5f7i", ct);
+            var a19 = await scopedAdhocAddressService.GetPrivateAddress("nano_1bj5kg7mtdbukqqkncd7ft8q9bw5kpjj8diio45yyepb7agbwz7a8xgbz7u8", ct);
+            var a20 = await scopedAdhocAddressService.GetPrivateAddress("nano_1au1a41ecysi5aecrycwdyebiheehn6gi9nfwpww3otjqf4e1yz8qbbmyjc5", ct);
+            var a21 = await scopedAdhocAddressService.GetPrivateAddress("nano_1khi6q3jddi4nrgy1dzx7moz6tsyn7arrbphjkn4hcd1qjmrwzj864rdzs4c", ct);
+            var a22 = await scopedAdhocAddressService.GetPrivateAddress("nano_3kt13nj5e636e1uct41anrqy7inxwpu9ijge9pb96kubxyu1eezakwsohxc1", ct);
+            var a23 = await scopedAdhocAddressService.GetPrivateAddress("nano_3sdnytsdf549x8rjjd3peea7hmafufmjbnudenkw4dkig5jjpkwkjsn4x49x", ct);
+            var a24 = await scopedAdhocAddressService.GetPrivateAddress("nano_1jmrrssen3gxkaw5nzshfb1jx36ziye8zmu1pfkwf1n7zf45fgzyx5j5kc5j", ct);
+            var a25 = await scopedAdhocAddressService.GetPrivateAddress("nano_3y7ipwzurt8c9f3kfxopi199th77mxdgomxfurj61nwqiak6fmbyo74wgcsf", ct);
+
+            Console.WriteLine(a1);
+            Console.WriteLine(a2);
+            Console.WriteLine(a3);
+            Console.WriteLine(a4);
+            Console.WriteLine(a5);
+            Console.WriteLine(a6);
+            Console.WriteLine(a7);
+            Console.WriteLine(a8);
+            Console.WriteLine(a9);
+            Console.WriteLine(a10);
+            Console.WriteLine(a11);
+            Console.WriteLine(a12);
+            Console.WriteLine(a13);
+            Console.WriteLine(a14);
+            Console.WriteLine(a15);
+            Console.WriteLine(a16);
+            Console.WriteLine(a17);
+            Console.WriteLine(a18);
+            Console.WriteLine(a19);
+            Console.WriteLine(a20);
+            Console.WriteLine(a21);
+            Console.WriteLine(a22);
+            Console.WriteLine(a23);
+            Console.WriteLine(a24);
+            Console.WriteLine(a25);
 
             var rpc = _nanoRpcProvider.RpcClients[cryptoCode];
 
