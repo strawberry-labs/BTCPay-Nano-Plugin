@@ -74,7 +74,7 @@ public class NanoPlugin : BaseBTCPayServerPlugin
 
         services.AddSingleton<NanoRPCProvider>();
 
-        services.AddSingleton<NanoLikePaymentConfigService>();
+        services.AddScoped<NanoLikePaymentConfigService>();
 
         services.AddHostedService<NanoLikeSummaryUpdaterHostedService>();
 
@@ -99,7 +99,7 @@ public class NanoPlugin : BaseBTCPayServerPlugin
         services.AddHostedService(sp => sp.GetRequiredService<NanoBlockchainListenerHostedService>());
 
         services.AddHostedService<PluginMigrationRunner>();
-        services.AddSingleton(sp =>
+        services.AddScoped(sp =>
         ActivatorUtilities.CreateInstance<NanoAdhocAddressService>(sp, network));
         services.AddSingleton<MyPluginService>();
         services.AddSingleton<MyPluginDbContextFactory>();

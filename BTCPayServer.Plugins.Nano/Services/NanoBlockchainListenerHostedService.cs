@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json.Linq;
 
 using BTCPayServer.Logging;
 using BTCPayServer.Plugins.Nano.Configuration;
@@ -18,20 +20,25 @@ using System.Numerics;
 using BTCPayServer.Events;
 using BTCPayServer.Plugins.Nano.RPC;
 using BTCPayServer.Plugins.Nano.RPC.Models;
+using BTCPayServer.Services.Stores;
+using BTCPayServer.Payments;
 
 namespace BTCPayServer.Plugins.Nano.Services
 {
     public class NanoBlockchainListenerHostedService : IHostedService
     {
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly NanoRPCProvider _NanoRpcProvider;
         private readonly NanoLikeConfiguration _nanoLikeConfiguration;
-        private readonly NanoLikePaymentConfigService _nanoLikePaymentConfigService;
         private readonly EventAggregator _eventAggregator;
         private readonly Uri _confirmationsWebSocketUri;
         // Address list + pollers
         private readonly object _addressesLock = new();
         private readonly List<AdhocAddress> _addresses = new();
         private readonly Dictionary<(string CryptoCode, string Address), CancellationTokenSource> _pollers = new();
+
+        private readonly Dictionary<string, CancellationTokenSource> _walletReceivePollCts = new();
+        private CancellationTokenSource _storePollingCts;
 
         // WS state
         private readonly object _wsStateLock = new();
@@ -53,14 +60,14 @@ namespace BTCPayServer.Plugins.Nano.Services
         public NanoBlockchainListenerHostedService(
             NanoRPCProvider nanoRpcProvider,
             NanoLikeConfiguration nanoLikeConfiguration,
-            NanoLikePaymentConfigService nanoLikePaymentConfigService,
             EventAggregator eventAggregator,
+            IServiceScopeFactory scopeFactory,
             Logs logs)
         {
             _NanoRpcProvider = nanoRpcProvider;
             _nanoLikeConfiguration = nanoLikeConfiguration;
-            _nanoLikePaymentConfigService = nanoLikePaymentConfigService;
             _eventAggregator = eventAggregator;
+            _scopeFactory = scopeFactory;
             Logs = logs;
 
             _confirmationsWebSocketUri = new Uri(
@@ -71,6 +78,10 @@ namespace BTCPayServer.Plugins.Nano.Services
         {
             _Cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
+            using var scope = _scopeFactory.CreateScope();
+            var scopedStoreRepository = scope.ServiceProvider.GetRequiredService<StoreRepository>();
+            var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
+
             // Start pollers for any pre-populated addresses (if any)
             foreach (var address in SnapshotAddresses())
                 StartPollingForAddress(address);
@@ -78,6 +89,23 @@ namespace BTCPayServer.Plugins.Nano.Services
             // Only start WS if we already have addresses
             if (SnapshotAddresses().Length > 0)
                 EnsureWebSocketRunningIfNeeded();
+
+            var stores = await scopedStoreRepository.GetStores();
+            var pmi = PaymentTypes.CHAIN.GetPaymentMethodId("XNO");
+
+            foreach (var storeData in stores) 
+            {
+                var storeId = storeData.Id;
+                var cfg = await scopedNanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+
+                if (cfg.Wallet != null) {
+                    StartPollingWalletReceiveForStore(storeId);
+                } else {
+                    continue;
+                }
+            }
+
+            StartPollingWalletReceiveForNewStore();   
 
             // return Task.CompletedTask;
         }
@@ -98,6 +126,11 @@ namespace BTCPayServer.Plugins.Nano.Services
                         cts.Cancel();
                 }
 
+                foreach (var walletCts in _walletReceivePollCts.Values)
+                    walletCts.Cancel();
+
+                _storePollingCts?.Cancel();
+
                 if (_runningTasks.Count > 0)
                     await Task.WhenAll(_runningTasks).ConfigureAwait(false);
             }
@@ -105,7 +138,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             finally
             {
                 _Cts?.Dispose();
-                _currentWebSocket?.Dispose();
+                _storePollingCts?.Dispose();
             }
         }
 
@@ -113,7 +146,6 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         public bool AddAddress(AdhocAddress address)
         {
-            Console.WriteLine("Adding Address");
             if (string.IsNullOrWhiteSpace(address.Address))
                 return false;
 
@@ -143,18 +175,14 @@ namespace BTCPayServer.Plugins.Nano.Services
             if (firstAfterAdd)
             {
                 // Start/restart the WS connection (initial subscribe will send the full snapshot)
-                Console.WriteLine("STarting WS Connection");
                 EnsureWebSocketRunningIfNeeded();
             }
             else
             {
                 // If already connected, send an update
-                Console.WriteLine("Updating WS Connection " + newAccount);
-                // _ = TrySendUpdateAsync(accountsAdd: new[] { newAccount }, accountsDel: null);
-                string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
-                Console.WriteLine("Updating websocket addresses");
-                Console.WriteLine(addresses[0] + " " + addresses[1]);
-                _ = TrySendUpdateAsync(accountsList: addresses);
+                _ = TrySendUpdateAsync(accountsAdd: new[] { newAccount }, accountsDel: null);
+                // string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
+                // _ = TrySendUpdateAsync(accountsList: addresses);
             }
 
             return true;
@@ -162,10 +190,8 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         public bool RemoveAddress(AdhocAddress address)
         {
-            Console.WriteLine("In RemoveAddress");
             if (string.IsNullOrWhiteSpace(address.Address))
             {
-                Console.WriteLine("In Here 1");
                 return false;
             }
 
@@ -184,7 +210,6 @@ namespace BTCPayServer.Plugins.Nano.Services
 
             if (!removed)
             {
-                Console.WriteLine("In Here 1");
                 return false;
             }
 
@@ -201,11 +226,9 @@ namespace BTCPayServer.Plugins.Nano.Services
             else
             {
                 // If still connected, send an update
-                // _ = TrySendUpdateAsync(accountsAdd: null, accountsDel: new[] { address.Address });
-                string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
-                Console.WriteLine("Updating websocket addresses");
-                Console.WriteLine(addresses[0]);
-                _ = TrySendUpdateAsync(accountsList: addresses);
+                _ = TrySendUpdateAsync(accountsAdd: null, accountsDel: new[] { address.Address });
+                // string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
+                // _ = TrySendUpdateAsync(accountsList: addresses);
             }
 
             return true;
@@ -226,7 +249,6 @@ namespace BTCPayServer.Plugins.Nano.Services
             // Only start if there are addresses
             if (SnapshotAddresses().Length == 0)
             {
-                Console.WriteLine("Num addresses is 0");
                 return;
             }
 
@@ -352,18 +374,18 @@ namespace BTCPayServer.Plugins.Nano.Services
                             break;
 
                         var message = builder.ToString();
-                        Console.WriteLine(message);
+
                         try
                         {
                             using var doc = JsonDocument.Parse(message);
-                            var root = doc.RootElement;
+                            var root = doc.RootElement.Clone();
                             if (root.TryGetProperty("message", out var msg) &&
                                 msg.TryGetProperty("account", out var account) &&
                                 msg.TryGetProperty("hash", out var hash))
                             {
                                 Logs.PayServer.LogInformation("WS confirmation: account={Account} hash={Hash}", account.GetString(), hash.GetString());
 
-                                SendNanoEvent(root);
+                                _ = Task.Run(() => SendNanoEvent(root));
                             }
                             else
                             {
@@ -410,8 +432,10 @@ namespace BTCPayServer.Plugins.Nano.Services
         {
             try
             {
-                if (!data.TryGetProperty("message", out var msg))
+                if (!data.TryGetProperty("message", out var msg)) {
                     return;
+                }
+                
                 // Common fields
                 var account = msg.TryGetProperty("account", out var a) ? a.GetString() : null;
                 var hash = msg.TryGetProperty("hash", out var h) ? h.GetString() : null;
@@ -444,7 +468,6 @@ namespace BTCPayServer.Plugins.Nano.Services
                 if (accountIsOurs || destinationIsOurs)
                 {
                     var accounts = SnapshotAddresses();
-
                 }
 
                 // Convert amount raw -> text nano for logging
@@ -465,7 +488,6 @@ namespace BTCPayServer.Plugins.Nano.Services
                 {
                     if (destinationIsOurs && !accountIsOurs)
                     {
-
                         var addresses = GetAddresses();
                         AdhocAddress adhocAddress = addresses.Where(a => a.Address == linkAsAccount).ToArray()[0];
                         string storeId = adhocAddress.StoreId;
@@ -538,8 +560,7 @@ namespace BTCPayServer.Plugins.Nano.Services
                     }
                     // Currently no need to track confirmations on store wallet.
                     // Need to add additional logic.
-                    // TODO: Configure receive on store wallet event. 
-
+                
                     // else if (destinationIsOurs)
                     // {
                     //     var ev = new NanoEvent
@@ -564,6 +585,7 @@ namespace BTCPayServer.Plugins.Nano.Services
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex);
                 Logs.PayServer.LogDebug(ex, "Failed processing Nano confirmation message");
             }
 
@@ -657,23 +679,19 @@ namespace BTCPayServer.Plugins.Nano.Services
             }
         }
 
-        private async Task TrySendUpdateAsync(string[] accountsList, string[] accountsAdd = null, string[] accountsDel = null)
+        private async Task TrySendUpdateAsync(string[] accountsAdd = null, string[] accountsDel = null)
         {
-            // TODO: Update code after testing the final deployment setup. Current code runs based on the Joohanssen proxy's settings for websocket update
-            Console.WriteLine(1);
-            Console.WriteLine(accountsList.Length);
             // Nothing to send
-            // var addEmpty = accountsAdd == null || accountsAdd.Length == 0;
-            // var delEmpty = accountsDel == null || accountsDel.Length == 0;
-            // if (addEmpty && delEmpty)
-            if (accountsList.Length == 0)
+            var addEmpty = accountsAdd == null || accountsAdd.Length == 0;
+            var delEmpty = accountsDel == null || accountsDel.Length == 0;
+            if (addEmpty && delEmpty)
                 return;
+            // if (accountsList.Length == 0)
 
-            Console.WriteLine(2);
             var ws = _currentWebSocket;
             if (ws == null || ws.State != WebSocketState.Open)
                 return;
-            Console.WriteLine(3);
+
             var payload = new UpdatePayload
             {
                 action = "update",
@@ -681,9 +699,9 @@ namespace BTCPayServer.Plugins.Nano.Services
                 ack = "true",
                 options = new UpdateOptions
                 {
-                    // accounts_add = addEmpty ? null : accountsAdd,
-                    // accounts_del = delEmpty ? null : accountsDel
-                    accounts = accountsList
+                    accounts_add = addEmpty ? null : accountsAdd,
+                    accounts_del = delEmpty ? null : accountsDel
+                    // accounts = accountsList
                 }
             };
 
@@ -720,6 +738,101 @@ namespace BTCPayServer.Plugins.Nano.Services
         }
 
         // Manual polling failsafe
+
+        // All this wallet polling is only for pippin
+        private void StartPollingWalletReceiveForStore(string storeId) {
+            var key = storeId;
+            if (_walletReceivePollCts.ContainsKey(key))
+                return;
+
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_Cts.Token);
+
+            _walletReceivePollCts[key] = linkedCts;
+
+            // call pollwalletreceive
+            var task = PollWalletReceive(linkedCts.Token, key);
+            _runningTasks.Add(task);
+        }
+
+        private void StartPollingWalletReceiveForNewStore() {
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_Cts.Token);
+
+            _storePollingCts = linkedCts;
+
+            var storePollTask = PollWalletReceiveForNewStore(linkedCts.Token);
+            _runningTasks.Add(storePollTask);
+        }
+
+        private async Task PollWalletReceiveForNewStore(CancellationToken ct) {
+            var delay = TimeSpan.FromMinutes(2);
+            Logs.PayServer.LogInformation("Starting Store-Check Poll for Wallet Receive");
+
+            while (!ct.IsCancellationRequested)
+            {
+                try {
+                    using var scope = _scopeFactory.CreateScope();
+                    var scopedStoreRepository = scope.ServiceProvider.GetRequiredService<StoreRepository>();
+                    var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
+
+                    var stores = await scopedStoreRepository.GetStores();
+
+                    var storesIdsNotPolling = stores.Select((store) => store.Id).Where((id) => !_walletReceivePollCts.ContainsKey(id));
+
+                    foreach (var storeId in storesIdsNotPolling) 
+                    {
+                        var cfg = await scopedNanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+
+                        if (cfg.Wallet != null) {
+                            StartPollingWalletReceiveForStore(storeId);
+                        } else {
+                            continue;
+                        }
+                    }
+                } catch (Exception ex) {
+                    Console.WriteLine(ex);
+                }
+
+                try
+                {
+                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
+        }
+
+        private async Task PollWalletReceive(CancellationToken ct, string storeId) {
+            var delay = TimeSpan.FromMinutes(2);
+            Logs.PayServer.LogInformation("Starting wallet receive poll loop for storeId - " + storeId);
+
+            while (!ct.IsCancellationRequested)
+            {
+                try {
+                    using var scope = _scopeFactory.CreateScope();
+                    var scopedNanoLikePaymentConfigService = scope.ServiceProvider.GetRequiredService<NanoLikePaymentConfigService>();
+                    var config = await scopedNanoLikePaymentConfigService.getPaymentConfig(storeId, "XNO");
+                    var walletId = config.Wallet;
+
+                    var response = await _NanoRpcProvider.RpcClients["XNO"].SendCommandAsync<ReceiveAllRequest, ReceiveAllResponse>("receive_all", new ReceiveAllRequest { Wallet=walletId });
+
+                } catch (Exception ex) {
+                    Console.WriteLine(ex);
+                }
+
+                try
+                {
+                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
+
+            Logs.PayServer.LogInformation("Stopped wallet receive poll loop for storeId - " + storeId);
+        }
 
         private void StartPollingForAddress(AdhocAddress address)
         {
@@ -759,71 +872,11 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task PollConfirmationsLoopAsync(CancellationToken ct, string cryptoCode, AdhocAddress address)
         {
-            var delay = TimeSpan.FromSeconds(10);
+            var delay = TimeSpan.FromSeconds(300);
             Logs.PayServer.LogInformation("Starting confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address.Address);
 
             while (!ct.IsCancellationRequested)
             {
-                // try
-                // {
-                //     Console.WriteLine("POLLING FOR ADDRESS " + address.Address);
-
-                //     var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountsReceivableRequest, AccountsReceivableResponse>(
-                //                     "accounts_receivable", new AccountsReceivableRequest { Accounts = [address.Address], Count = "1", Source = "true" });
-
-                //     if (response.Blocks != null)
-                //     {
-                //         foreach (var accountEntry in response.Blocks)
-                //         {
-                //             string account = accountEntry.Key;
-                //             var blocks = accountEntry.Value;
-
-                //             foreach (var blockEntry in blocks)
-                //             {
-                //                 string blockHash = blockEntry.Key;
-                //                 string amount = blockEntry.Value.Amount;
-                //                 string source = blockEntry.Value.Source;
-
-                //                 // Do something with the data
-                //                 // Console.WriteLine($"Account: {account}");
-                //                 // Console.WriteLine($"Block: {blockHash}");
-                //                 // Console.WriteLine($"Amount: {amount}");
-                //                 // Console.WriteLine($"Source: {source}");
-                //                 // Console.WriteLine();
-
-                //                 var addresses = GetAddresses();
-                //                 AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
-                //                 string storeId = adhocAddress.StoreId;
-
-                //                 // External payer sent to our adhoc
-                //                 var ev = new NanoEvent
-                //                 {
-                //                     CryptoCode = cryptoCode,
-                //                     Kind = NanoEventKind.SendToAdhocConfirmed,
-                //                     Account = account,       // our adhoc account
-                //                     BlockHash = blockHash,
-                //                     AmountRaw = amount,
-                //                     FromAccount = source,
-                //                     ToAccount = account,
-                //                     StoreId = storeId
-                //                 };
-
-                //                 Logs.PayServer.LogInformation("Nano Polling: SendToAdhocConfirmed from {From} to {To} amount(raw)={Raw} (~{Nano} NANO) hash={Hash}",
-                //                     source, account, amount, RawToNanoString(amount), blockHash);
-                //                 _eventAggregator?.Publish(ev);
-                //             }
-                //         }
-                //     }
-                // }
-                // catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                // {
-                //     break;
-                // }
-                // catch (Exception ex)
-                // {
-                //     Logs.PayServer.LogError(ex, "Error polling confirmations for {Address}", address.Address);
-                // }
-
                 try
                 {
                     await Task.Delay(delay, ct).ConfigureAwait(false);
@@ -832,6 +885,67 @@ namespace BTCPayServer.Plugins.Nano.Services
                 {
                     break;
                 }
+
+                try
+                {
+                    Console.WriteLine("POLLING FOR ADDRESS " + address.Address);
+
+                    var response = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountsReceivableRequest, AccountsReceivableResponse>(
+                                    "accounts_receivable", new AccountsReceivableRequest { Accounts = [address.Address], Count = "1", Source = "true" });
+
+                    if (response.Blocks != null)
+                    {
+                        foreach (var accountEntry in response.Blocks)
+                        {
+                            string account = accountEntry.Key;
+                            var blocks = accountEntry.Value;
+
+                            foreach (var blockEntry in blocks)
+                            {
+                                string blockHash = blockEntry.Key;
+                                string amount = blockEntry.Value.Amount;
+                                string source = blockEntry.Value.Source;
+
+                                // Do something with the data
+                                // Console.WriteLine($"Account: {account}");
+                                // Console.WriteLine($"Block: {blockHash}");
+                                // Console.WriteLine($"Amount: {amount}");
+                                // Console.WriteLine($"Source: {source}");
+                                // Console.WriteLine();
+
+                                var addresses = GetAddresses();
+                                AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
+                                string storeId = adhocAddress.StoreId;
+
+                                // External payer sent to our adhoc
+                                var ev = new NanoEvent
+                                {
+                                    CryptoCode = cryptoCode,
+                                    Kind = NanoEventKind.SendToAdhocConfirmed,
+                                    Account = account,       // our adhoc account
+                                    BlockHash = blockHash,
+                                    AmountRaw = amount,
+                                    FromAccount = source,
+                                    ToAccount = account,
+                                    StoreId = storeId
+                                };
+
+                                Logs.PayServer.LogInformation("Nano Polling: SendToAdhocConfirmed from {From} to {To} amount(raw)={Raw} (~{Nano} NANO) hash={Hash}",
+                                    source, account, amount, RawToNanoString(amount), blockHash);
+                                _eventAggregator?.Publish(ev);
+                            }
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Logs.PayServer.LogError(ex, "Error polling confirmations for {Address}", address.Address);
+                }
+
             }
 
             Logs.PayServer.LogInformation("Stopped confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address.Address);
@@ -848,9 +962,9 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private sealed class UpdateOptions
         {
-            // public string[] accounts_add { get; set; }
-            // public string[] accounts_del { get; set; }
-            public string[] accounts { get; set; }
+            public string[] accounts_add { get; set; }
+            public string[] accounts_del { get; set; }
+            // public string[] accounts { get; set; }
         }
 
         public sealed class AdhocAddressByAddressComparer : IEqualityComparer<AdhocAddress>

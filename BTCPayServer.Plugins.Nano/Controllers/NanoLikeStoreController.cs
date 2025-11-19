@@ -504,7 +504,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             // TODO: Change to account after generating new wallet.
             // var account = config.PublicAddress;
             var account = config.Account;
-
+            
             try
             {
                 var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
@@ -592,7 +592,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             {
                 Console.WriteLine(ex);
 
-                TempData[WellKnownTempData.ErrorMessage] = "Send Failed. Try again in sometime";
+                TempData[WellKnownTempData.ErrorMessage] = "Send Failed. Try again in sometime. If it is a new wallet, you'll need to receive nano first before being able to send.";
             }
 
             return Redirect("/");
@@ -825,12 +825,23 @@ namespace BTCPayServer.Plugins.Nano.Controllers
 
                 string wallet = response.Wallet;
 
-                CreateAccountResponse accountResponse = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("account_create", new CreateAccountRequest
+                // Used for plain nano node.
+
+                // CreateAccountResponse accountResponse = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("account_create", new CreateAccountRequest
+                // {
+                //     Wallet = wallet
+                // });
+
+                // string account = accountResponse.Account;
+
+                // Used for pippin wallet.
+
+                AccountListResponse accountResponse = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountListRequest, AccountListResponse>("account_list", new AccountListRequest
                 {
                     Wallet = wallet
                 });
 
-                string account = accountResponse.Account;
+                string account = accountResponse.Accounts[0];
 
                 AccountKeyResponse keyResponse = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountKeyRequest, AccountKeyResponse>("account_key", new AccountKeyRequest
                 {
