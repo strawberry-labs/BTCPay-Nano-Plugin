@@ -203,8 +203,6 @@ namespace BTCPayServer.Plugins.Nano.Controllers
                 // var account = nanoCfg.PublicAddress;
                 var account = nanoCfg.Account;
 
-                Console.WriteLine(nanoCfg.Wallet);
-
                 var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(
                     "account_info", new AccountInfoRequest { Account = account });
 
@@ -506,9 +504,7 @@ namespace BTCPayServer.Plugins.Nano.Controllers
             // TODO: Change to account after generating new wallet.
             // var account = config.PublicAddress;
             var account = config.Account;
-
-            Console.WriteLine(config.Wallet);
-
+            
             try
             {
                 var info = await _NanoRpcProvider.RpcClients[cryptoCode].SendCommandAsync<AccountInfoRequest, AccountInfoResponse>(

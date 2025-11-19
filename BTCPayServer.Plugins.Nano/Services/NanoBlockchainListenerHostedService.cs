@@ -146,7 +146,6 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         public bool AddAddress(AdhocAddress address)
         {
-            Console.WriteLine("Adding Address");
             if (string.IsNullOrWhiteSpace(address.Address))
                 return false;
 
@@ -176,13 +175,11 @@ namespace BTCPayServer.Plugins.Nano.Services
             if (firstAfterAdd)
             {
                 // Start/restart the WS connection (initial subscribe will send the full snapshot)
-                Console.WriteLine("STarting WS Connection");
                 EnsureWebSocketRunningIfNeeded();
             }
             else
             {
                 // If already connected, send an update
-                Console.WriteLine("Updating WS Connection " + newAccount);
                 _ = TrySendUpdateAsync(accountsAdd: new[] { newAccount }, accountsDel: null);
                 // string[] addresses = SnapshotAddresses().Select(account => account.Address).ToArray();
                 // _ = TrySendUpdateAsync(accountsList: addresses);
@@ -193,10 +190,8 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         public bool RemoveAddress(AdhocAddress address)
         {
-            Console.WriteLine("In RemoveAddress");
             if (string.IsNullOrWhiteSpace(address.Address))
             {
-                Console.WriteLine("In Here 1");
                 return false;
             }
 
@@ -215,7 +210,6 @@ namespace BTCPayServer.Plugins.Nano.Services
 
             if (!removed)
             {
-                Console.WriteLine("In Here 1");
                 return false;
             }
 
@@ -255,7 +249,6 @@ namespace BTCPayServer.Plugins.Nano.Services
             // Only start if there are addresses
             if (SnapshotAddresses().Length == 0)
             {
-                Console.WriteLine("Num addresses is 0");
                 return;
             }
 
@@ -439,9 +432,7 @@ namespace BTCPayServer.Plugins.Nano.Services
         {
             try
             {
-                Console.WriteLine("Inside Send Nano Event");
                 if (!data.TryGetProperty("message", out var msg)) {
-                    Console.WriteLine("No Message Property");
                     return;
                 }
                 
@@ -495,10 +486,8 @@ namespace BTCPayServer.Plugins.Nano.Services
                 // - receive/open: receive on adhoc or (if subscribed) on store wallet
                 if (string.Equals(subtype, "send", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine("Send Block");
                     if (destinationIsOurs && !accountIsOurs)
                     {
-                        Console.WriteLine("Send to Adhoc Event");
                         var addresses = GetAddresses();
                         AdhocAddress adhocAddress = addresses.Where(a => a.Address == linkAsAccount).ToArray()[0];
                         string storeId = adhocAddress.StoreId;
@@ -522,7 +511,6 @@ namespace BTCPayServer.Plugins.Nano.Services
                     }
                     else if (accountIsOurs && !string.IsNullOrEmpty(linkAsAccount))
                     {
-                        Console.WriteLine("Send To StoreWallet Event");
                         // Our adhoc sent to store wallet (sweep)
                         var addresses = GetAddresses();
                         AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
@@ -549,10 +537,8 @@ namespace BTCPayServer.Plugins.Nano.Services
                 else if (string.Equals(subtype, "receive", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(subtype, "open", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine("Receive/Open");
                     if (accountIsOurs)
                     {
-                        Console.WriteLine("Receive On Adhoc");
                         var addresses = GetAddresses();
                         AdhocAddress adhocAddress = addresses.Where(a => a.Address == account).ToArray()[0];
                         string storeId = adhocAddress.StoreId;
@@ -594,13 +580,11 @@ namespace BTCPayServer.Plugins.Nano.Services
                 else
                 {
                     // change/epoch/etc. not used
-                    Console.WriteLine("Random Event Other");
                     Logs.PayServer.LogDebug("Nano WS: Ignored subtype {Subtype} for account={Account} hash={Hash}", subtype, account, hash);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Errored");
                 Console.WriteLine(ex);
                 Logs.PayServer.LogDebug(ex, "Failed processing Nano confirmation message");
             }
