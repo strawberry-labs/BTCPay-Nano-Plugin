@@ -764,7 +764,7 @@ namespace BTCPayServer.Plugins.Nano.Services
         }
 
         private async Task PollWalletReceiveForNewStore(CancellationToken ct) {
-            var delay = TimeSpan.FromMinutes(2);
+            var delay = TimeSpan.FromSeconds(30);
             Logs.PayServer.LogInformation("Starting Store-Check Poll for Wallet Receive");
 
             while (!ct.IsCancellationRequested)
@@ -804,7 +804,7 @@ namespace BTCPayServer.Plugins.Nano.Services
         }
 
         private async Task PollWalletReceive(CancellationToken ct, string storeId) {
-            var delay = TimeSpan.FromMinutes(2);
+            var delay = TimeSpan.FromSeconds(30);
             Logs.PayServer.LogInformation("Starting wallet receive poll loop for storeId - " + storeId);
 
             while (!ct.IsCancellationRequested)
@@ -872,7 +872,7 @@ namespace BTCPayServer.Plugins.Nano.Services
 
         private async Task PollConfirmationsLoopAsync(CancellationToken ct, string cryptoCode, AdhocAddress address)
         {
-            var delay = TimeSpan.FromSeconds(300);
+            var delay = TimeSpan.FromMinutes(2);
             Logs.PayServer.LogInformation("Starting confirmations poll loop for {CryptoCode} address {Address}", cryptoCode, address.Address);
 
             while (!ct.IsCancellationRequested)
